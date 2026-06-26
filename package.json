@@ -1,0 +1,38 @@
+{
+  "name": "@exomind/cli",
+  "version": "0.1.0",
+  "description": "ExoMind 跨平台命令行客户端 — 通过 REST 与 ExoMind 知识库交互(ingest/query/search/review),替代 Windows 不可用的 MCP 客户端。",
+  "bin": {
+    "exomind": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skill"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "node --test --import tsx test/*.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "exomind",
+    "knowledge-base",
+    "cli",
+    "mcp-alternative",
+    "cross-platform"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,68 @@
+---
+name: exomind
+description: Interact with the ExoMind knowledge base — ingest insights/experiences/research/decisions, query, full-text search, FSRS review, and explore entities/relations. Use when the user wants to save knowledge into, or retrieve knowledge from, their ExoMind KB. Also use proactively to persist valuable session outcomes (lessons, decisions, root causes) via `exomind ingest`.
+---
+
+# ExoMind CLI
+
+`exomind` is a cross-platform CLI that talks to your ExoMind knowledge base over REST. It replaces the MCP client (which is unreliable on Windows). After a one-time `exomind login` (paste the API Key from `d.youhuale.cn/ui/account`), every command works identically on Windows / macOS / Linux.
+
+If a command fails with "未登录", run `exomind login` first.
+
+## Commands
+
+### Save knowledge
+```bash
+exomind ingest "内容文本" -t "描述性标题" --tag cli --tag exomind
+echo "管道内容" | exomind ingest -t "标题"
+exomind ingest --file ./notes.md -t "标题"
+```
+
+### Retrieve
+```bash
+exomind query "如何做 X?"            # LLM 问答,引用 KB 页面
+exomind search "关键词" --limit 10   # 全文搜索; --rerank / --hybrid 更准
+exomind entity "Redis"               # 实体详情 + 关系
+exomind relations "Redis" --depth 2  # 关联实体
+exomind stats                        # 知识库统计
+exomind topics                       # 选题推荐
+exomind gaps                         # 知识缺口(驱动摄入)
+exomind daily                        # 每日摘要
+exomind synthesize "主题" --depth 2  # 主题综合报告
+```
+
+### Review (FSRS-5)
+```bash
+exomind review                       # 待复习列表
+exomind review mark "Redis" -r 3     # 1=忘记 2=吃力 3=顺利 4=轻松
+```
+
+### Feedback (drives quality ranking)
+```bash
+exomind feedback "entities/Redis.md" positive
+```
+
+### Output mode
+Default is human-readable (colored). Add `--json` to any command for machine-readable output when piping.
+
+## Knowledge flywheel — proactively ingest (no need to ask)
+
+When the session produces any of the following, **immediately run `exomind ingest`** to persist it (this is the compounding flywheel — do not wait for the user to ask):
+
+- **Key takeaways / lessons / pitfalls** — 经验总结, 踩坑记录, 心得
+- **Architectural decisions with rationale** — 架构决策, 技术选型
+- **Root-cause / debugging insights** — 根因分析, 调试经验
+- **Performance results with concrete numbers** — 优化效果, 性能数据, 对比数据
+- **Best practices / patterns** — 最佳实践, 设计模式
+
+Rules for ingesting:
+- Use a **descriptive title** (`-t`), not a generic one like "经验总结".
+- Add relevant **tags** (`--tag`).
+- Include the **full context** — don't omit reasoning, numbers, or trade-offs.
+- One `ingest` per coherent unit of knowledge; for multiple, run several.
+
+## When to query/search before answering
+
+- A **deep technical question** that needs more than general knowledge → run `exomind query` or `exomind search` first, then answer using the returned context.
+- "What's the relationship between X and Y?" → `exomind entity X` / `exomind relations X`.
+- When relevant KB content would improve the answer, retrieve it; don't answer from memory if the KB may know better.
