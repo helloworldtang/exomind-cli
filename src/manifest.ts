@@ -39,6 +39,17 @@ export function saveManifest(m: Manifest): void {
   }
 }
 
+/** 记录一个文件已摄入(--file 与 --dir 共用,保证跨模式判重一致)。
+ *  hash 用原始内容,与 planIngestest 的算法一致 → --file 摄过的文件,--dir 会跳过。 */
+export function recordFile(manifest: Manifest, absPath: string, rawContent: string, title: string): void {
+  manifest[absPath] = {
+    hash: sha256(rawContent),
+    ingested_at: new Date().toISOString(),
+    title,
+    size: rawContent.length,
+  };
+}
+
 /** 清理指定目录下已不存在的文件记录(只清该目录,不碰其它目录)。 */
 export function cleanupStale(m: Manifest, dir: string, currentFiles: string[]): void {
   const prefix = path.resolve(dir) + path.sep;

@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ApiClient } from './api';
 import { opTimeout } from './api';
-import { sha256, loadManifest, saveManifest, cleanupStale, type Manifest } from './manifest';
+import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, type Manifest } from './manifest';
 import { readFileText } from './io';
 import { output, green, red, dim } from './format';
 
@@ -94,7 +94,7 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
   const plan = planIngestest(files, manifest, !!opts.force);
   const total = files.length;
   process.stderr.write(
-    `目录 ${dir}: ${total} 文件 → 新增/更新 ${plan.toIngest.length},跳过 ${plan.toSkip.length}\n`,
+    `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}\n`,
   );
 
   let added = 0;
@@ -103,27 +103,25 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
   for (let i = 0; i < plan.toIngest.length; i++) {
     const f = plan.toIngest[i];
     const prev = manifest[f.path];
-    process.stderr.write(
-      `⏳ [${i + 1}/${plan.toIngest.length}] ${path.basename(f.path)} ${prev ? '(更新)' : '(新增)'}…\n`,
-    );
+    process.stderr.write(`⏳ [${i + 1}/${plan.toIngest.length}] ${path.basename(f.path)}…\n`);
     try {
-      await client.post(
+      const res = await client.post(
         '/ingest',
         { content: f.content, title: f.title, tags: opts.tag },
         { timeoutMs: opTimeout(300000) },
       );
-      manifest[f.path] = {
-        hash: f.hash,
-        ingested_at: new Date().toISOString(),
-        title: f.title,
-        size: f.content.length,
-      };
-      if (prev) updated++;
-      else added++;
+      recordFile(manifest, f.path, f.content, f.title);
       saveManifest(manifest);
+      if (prev) {
+        updated++;
+        process.stderr.write(`  ${green('✓')} 更新 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
+      } else {
+        added++;
+        process.stderr.write(`  ${green('✓')} 新增 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
+      }
     } catch (e) {
       failed++;
-      process.stderr.write(`  ${red('✗')} ${path.basename(f.path)}: ${(e as Error).message}\n`);
+      process.stderr.write(`  ${red('✗')} ${(e as Error).message}\n`);
     }
   }
 

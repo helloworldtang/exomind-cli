@@ -209,10 +209,10 @@ program
   .action(run(installCmd));
 
 async function main(): Promise<void> {
-  // 版本标志(第一个参数):-v / -V / --version / -version 等 → 直接出版本,不进 commander。
-  // 放首位才生效,避免误吞命令的合法参数(如 ingest "-v 文本")。
+  // 版本标志(第一个参数):-v / --version → 直接出版本(与 exomind 小写短选项风格一致)。
+  // -V 由 commander 默认提供。放首位才生效,避免误吞命令参数。
   const first = process.argv[2];
-  if (first && /^--?v(ersion)?$/i.test(first)) {
+  if (first && /^(-v|--version)$/.test(first)) {
     console.log(VERSION);
     process.exit(0);
   }
