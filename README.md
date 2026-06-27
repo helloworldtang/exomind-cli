@@ -115,15 +115,17 @@ skill/SKILL.md  Claude Code skill 源(install 时拷贝)
 test/           node:test 单元 + 协议级 e2e
 ```
 
-### 发布到 npm
+### 发布到 npm(自动,tag 触发)
+
+推 `v*` tag → GitHub Action 自动构建并发布(见 `.github/workflows/release.yml`),用仓库 secret `NPM_TOKEN` 认证。
 
 ```bash
-npm run build                 # prepublishOnly 会自动跑
-npm version patch
-npm publish --access public   # scope @exomind 需 --access public
+npm version patch          # bump 版本 + 建 commit + 建 v* tag
+git push --follow-tags     # 推 tag → 触发 CI → npm publish(带 provenance)
 ```
 
-发布内容由 `package.json` 的 `files: ["dist", "skill"]` 控制——只发构建产物与 skill,不含 src/test。
+> **首次配置**:在 npm 建 **Granular Access Token**(bypass 2FA,仅 `exomind` 包写权限),加到仓库 secret `NPM_TOKEN`。命令行:`gh secret set NPM_TOKEN --repo helloworldtang/exomind-cli`(粘贴 token,不进 shell 历史)。
+> 发布内容由 `package.json` 的 `files: ["dist", "skill"]` 控制——只发构建产物与 skill,不含 src/test。
 
 ## 设计要点
 
