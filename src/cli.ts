@@ -209,9 +209,10 @@ program
   .action(run(installCmd));
 
 async function main(): Promise<void> {
-  // 宽松版本标志: exomind -v / -V / --version / -version / -Version(独立使用)
-  const vArg = process.argv[2];
-  if (process.argv.length === 3 && vArg && /^--?v(ersion)?$/i.test(vArg)) {
+  // 版本标志(第一个参数):-v / -V / --version / -version 等 → 直接出版本,不进 commander。
+  // 放首位才生效,避免误吞命令的合法参数(如 ingest "-v 文本")。
+  const first = process.argv[2];
+  if (first && /^--?v(ersion)?$/i.test(first)) {
     console.log(VERSION);
     process.exit(0);
   }
