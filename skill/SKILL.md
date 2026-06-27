@@ -9,6 +9,13 @@ description: Interact with the ExoMind knowledge base — ingest insights/experi
 
 If a command fails with "未登录", run `exomind login` first.
 
+## ⚠️ 用法铁律(最先读,必守)
+
+1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`。
+2. **Skill 工具只调用一次**(加载本文件一次即可,后续一律用 Bash 跑 `exomind ...`)。
+3. 单条知识 → `exomind ingest "内容" -t 标题 --tag 标签`。
+4. ingest 是**同步**(每文件 1-3 min);`--dir` 串行 + `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
+
 ## 数据位置(重要 — 勿误报)
 
 **所有知识库数据都在服务器(d.youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
