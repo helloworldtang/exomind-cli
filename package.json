@@ -34,5 +34,13 @@
     "mcp-alternative",
     "cross-platform"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/helloworldtang/exomind-cli.git"
+  },
+  "homepage": "https://github.com/helloworldtang/exomind-cli#readme",
+  "bugs": {
+    "url": "https://github.com/helloworldtang/exomind-cli/issues"
+  }
 }
