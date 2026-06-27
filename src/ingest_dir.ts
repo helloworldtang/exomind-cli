@@ -128,14 +128,21 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
   cleanupStale(manifest, dir, files);
   saveManifest(manifest);
 
+  const allUpToDate = added + updated === 0 && plan.toSkip.length > 0 && failed === 0;
   output(
-    { added, updated, skipped: plan.toSkip.length, failed, total, dir },
-    () =>
+    { added, updated, skipped: plan.toSkip.length, failed, total, dir, allUpToDate },
+    () => {
       console.log(
         green('✓ 目录摄入完成') +
           dim(
             `: 新增 ${added} / 更新 ${updated} / 跳过 ${plan.toSkip.length} / 失败 ${failed} (共 ${total})`,
           ),
-      ),
+      );
+      if (allUpToDate) {
+        console.log(
+          dim('（全部已是最新,无需重摄;除非用户明确要求强制刷新,否则不要加 --force）'),
+        );
+      }
+    },
   );
 }

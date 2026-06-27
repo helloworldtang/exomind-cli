@@ -11,10 +11,11 @@ If a command fails with "未登录", run `exomind login` first.
 
 ## ⚠️ 用法铁律(最先读,必守)
 
-1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`。
+1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`。**用 `--dir` 时不要先 `Read` 文件**——CLI 自己读,预读纯浪费上下文。
 2. **Skill 工具只调用一次**(加载本文件一次即可,后续一律用 Bash 跑 `exomind ...`)。
 3. 单条知识 → `exomind ingest "内容" -t 标题 --tag 标签`。
 4. ingest 是**同步**(每文件 1-3 min);`--dir` 串行 + `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
+5. **"全部跳过"= 成功**(文件已在库且内容未变),**绝不**因此擅自加 `--force` 重摄(会白白重跑 N×分钟 LLM)。只有用户**明确**说"强制刷新/全量重处理/忽略缓存"才用 `--force`。
 
 ## 数据位置(重要 — 勿误报)
 
