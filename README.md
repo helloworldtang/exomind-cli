@@ -26,6 +26,7 @@ exomind whoami              # 验证登录
 exomind ingest "Redis 持久化:RDB 快照 + AOF 日志,混合模式推荐" -t "Redis 持久化" --tag redis
 echo "管道内容" | exomind ingest -t "标题"
 exomind ingest --file ./notes.md -t "标题"
+exomind ingest --dir ./notes --recursive      # 目录批量(增量: SHA-256 跳过未变文件)
 
 # 查询与搜索
 exomind query "Redis RDB 和 AOF 的区别?"

@@ -98,10 +98,14 @@ program
 // ── 写入 ──
 program
   .command('ingest [content...]')
-  .description('导入知识: 参数文本 / --file / stdin (echo ... | exomind ingest)')
-  .option('-t, --title <title>', '标题')
+  .description('导入知识: 参数文本 / --file / stdin / --dir 目录批量(增量)')
+  .option('-t, --title <title>', '标题(单文件模式)')
   .option('--tag <tag>', '标签(可重复)', collect, [])
   .option('--file <path>', '从文件读取内容')
+  .option('--dir <path>', '目录批量摄入(增量: 内容哈希跳过未变文件)')
+  .option('-r, --recursive', '递归子目录(配合 --dir)')
+  .option('--pattern <glob>', '文件名匹配,默认 *.md', '*.md')
+  .option('--force', '忽略 manifest,强制全量重摄(配合 --dir)')
   .action(run(ingest));
 
 // ── 查询 ──

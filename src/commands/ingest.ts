@@ -2,12 +2,23 @@
 import { opTimeout, type ApiClient } from '../api';
 import { output, ok, green, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
+import { runDirIngestest } from '../ingest_dir';
 
 export default async function ingest(
   client: ApiClient,
-  opts: { title?: string; tag?: string[]; file?: string },
+  opts: {
+    title?: string;
+    tag?: string[];
+    file?: string;
+    dir?: string;
+    recursive?: boolean;
+    pattern?: string;
+    force?: boolean;
+  },
   args: string[],
 ): Promise<void> {
+  if (opts.dir) return runDirIngestest(client, opts, opts.dir);
+
   let content = '';
   if (opts.file) {
     content = readFileText(opts.file);

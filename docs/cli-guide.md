@@ -44,6 +44,20 @@ exomind ingest --file ./notes.md -t "标题"
 | `--tag <tag>` | 标签(可重复) |
 | `--file <path>` | 从文件读取内容 |
 
+#### 目录批量 + 增量(`--dir`)
+
+同步整个目录,按内容 SHA-256 去重——**未变文件直接跳过**(不调 LLM),隔几天重跑同目录只摄新增/改动文件:
+
+```bash
+exomind ingest --dir ~/workspace/notes --recursive      # 增量(默认只 *.md)
+exomind ingest --dir ~/workspace/notes --force          # 强制全量重摄
+exomind ingest --dir ... --pattern "*.{md,txt}"         # 自定义匹配
+```
+
+- 标题按文件首个 H1 推导,否则用文件名。
+- 清单存 `~/.exomind/manifest.json`(绝对路径为 key);某目录下被删的文件下次扫描自动清记录。
+- 串行处理(弱服务器友好),stderr 打 `⏳ [i/n]`,结束汇总 `新增 N / 更新 M / 跳过 K / 失败 J`。
+
 ### 查询与搜索(读)
 
 ```bash

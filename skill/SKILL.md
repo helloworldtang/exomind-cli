@@ -11,9 +11,10 @@ If a command fails with "未登录", run `exomind login` first.
 
 ## 数据位置(重要 — 勿误报)
 
-**所有知识库数据都在服务器(d.youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅两处:
+**所有知识库数据都在服务器(d.youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
 - `~/.exomind/config.json` — 凭证
 - `~/.exomind/cache/` — hook 的关键词/实体缓存(从服务器拉的副本)
+- `~/.exomind/manifest.json` — 目录增量摄入的内容哈希清单(去重用,非知识库本身)
 
 摄入成功后输出 `✓ 已导入服务器知识库`。若要确认数据落地,用 `exomind search <关键词>` 复查。**不要向用户报告"已保存到 ~/my-wiki/entities/X.md"等本地路径——那是错的。**
 
@@ -23,6 +24,20 @@ If a command fails with "未登录", run `exomind login` first.
 - 默认超时:ingest/synthesize 5 分钟、query 3 分钟。需更长:设 `EXOMIND_TIMEOUT_MS=600000`。
 - **不要用 `timeout` 命令包裹**(macOS 默认无该命令;且 CLI 自己会等)。
 - 超长文本(>5 万字符)会被拒;拆成多条 ingest。
+
+## 批量目录摄入(增量,推荐)
+
+**本 skill 只加载一次。** 同步一个目录的多个文件,用 `--dir` 一条命令搞定——**不要**逐文件调用 Skill 或逐条 Bash:
+
+```bash
+exomind ingest --dir ~/workspace/notes --recursive        # 增量:只摄新增/改动
+exomind ingest --dir ~/workspace/notes --force            # 强制全量重摄
+exomind ingest --dir ~/workspace/notes --pattern "*.md"   # 默认就是 *.md
+```
+
+- **增量去重**:按文件内容 SHA-256 记在 `~/.exomind/manifest.json`,**未变的文件直接跳过**(不调 LLM),所以隔几天重跑同目录很便宜——只处理新/改文件。
+- **串行 + 进度**:弱服务器上每文件 1-3 分钟,`--dir` 串行处理、stderr 打 `⏳ [i/n]`;ingest 是**同步**(不是后台异步),会一直占住到完成。
+- 结束汇总:`新增 N / 更新 M / 跳过 K / 失败 J`。
 
 ## Commands
 
