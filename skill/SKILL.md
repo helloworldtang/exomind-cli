@@ -1,6 +1,6 @@
 ---
 name: exomind
-description: Interact with the ExoMind knowledge base — ingest insights/experiences/research/decisions, query, full-text search, FSRS review, and explore entities/relations. Use when the user wants to save knowledge into, or retrieve knowledge from, their ExoMind KB. Also use proactively to persist valuable session outcomes (lessons, decisions, root causes) via `exomind ingest`.
+description: "ExoMind knowledge base client. Load this skill FIRST (before reading files or crafting commands) whenever the user wants to save/import/ingest/存档 anything to the knowledge base — a single note, a file, a whole DIRECTORY of files, or session insights — or to query/search/review the KB. For a directory or multiple files, use `exomind ingest --dir <path>` in ONE command (incremental, auto-skip unchanged); NEVER read the files first, NEVER concat/merge them into one ingest, NEVER ingest file-by-file. Also proactively persist lessons/decisions/root-causes via `exomind ingest`."
 ---
 
 # ExoMind CLI
@@ -16,6 +16,7 @@ If a command fails with "未登录", run `exomind login` first.
 3. 单条知识 → `exomind ingest "内容" -t 标题 --tag 标签`。
 4. ingest 是**同步**(每文件 1-3 min);`--dir` 串行 + `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
 5. **"全部跳过"= 成功**(文件已在库且内容未变),**绝不**因此擅自加 `--force` 重摄(会白白重跑 N×分钟 LLM)。只有用户**明确**说"强制刷新/全量重处理/忽略缓存"才用 `--force`。
+6. **绝不把多个文件 `cat`/合并成一条 `ingest`**(丢失每篇结构、无法按文件判重、易超 5 万字限)。多个文件就是 `--dir`;单条才是文本 ingest。
 
 ## 数据位置(重要 — 勿误报)
 
