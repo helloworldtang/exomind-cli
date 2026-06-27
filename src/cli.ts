@@ -209,6 +209,12 @@ program
   .action(run(installCmd));
 
 async function main(): Promise<void> {
+  // 宽松版本标志: exomind -v / -V / --version / -version / -Version(独立使用)
+  const vArg = process.argv[2];
+  if (process.argv.length === 3 && vArg && /^--?v(ersion)?$/i.test(vArg)) {
+    console.log(VERSION);
+    process.exit(0);
+  }
   await program.parseAsync(process.argv);
 }
 
