@@ -1,5 +1,5 @@
 {
-  "name": "@exomind/cli",
+  "name": "exomind",
   "version": "0.1.1",
   "description": "ExoMind 跨平台命令行客户端 — 通过 REST 与 ExoMind 知识库交互(ingest/query/search/review),替代 Windows 不可用的 MCP 客户端。",
   "bin": {

@@ -1,4 +1,4 @@
-# @exomind/cli
+# exomind
 
 > ExoMind 知识库的跨平台命令行客户端。通过 REST 与服务器交互,装一次,Windows / macOS / Linux 一致可用。
 
@@ -12,7 +12,7 @@
 ## 安装
 
 ```bash
-npm install -g @exomind/cli
+npm install -g exomind
 exomind login               # 粘贴 d.youhuale.cn/ui/account 的 API Key
 exomind whoami              # 验证登录
 ```

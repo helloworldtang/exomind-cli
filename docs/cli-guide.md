@@ -3,7 +3,7 @@
 `exomind` 是 ExoMind 知识库的跨平台命令行客户端,通过 REST 与服务器交互。
 替代 Windows 上不可用的 MCP 客户端;Mac/Linux 同样适用。
 
-- 包名:`@exomind/cli`(npm)
+- 包名:`exomind`(npm)
 - 运行时:Node.js 18+
 - 配置:`~/.exomind/config.json`(权限 0600)
 - 全局选项:`--json`(机器可读)、`--base-url <url>`、`--api-key <key>`、`-V/--version`、`-h/--help`
@@ -11,7 +11,7 @@
 ## 安装
 
 ```bash
-npm install -g @exomind/cli
+npm install -g exomind
 exomind login            # 粘贴 d.youhuale.cn/ui/account 的 API Key
 exomind install --with-hook   # 装 Claude Code skill + UserPromptSubmit hook
 ```
@@ -103,6 +103,6 @@ CLI 命令与服务端 REST 端点 1:1(见 `src/exo/api/query.py`):`ingest`→`P
 | `未登录。请先运行 exomind login` | 登录,或设 `EXOMIND_API_KEY` |
 | `HTTP 401: ...` | API Key 错误或失效,重新登录获取 |
 | `请求超时` | query/synthesize 走 LLM 较慢;或网络问题,重试 |
-| `exomind: command not found` | 确认 npm 全局 bin 在 PATH;或用 `npx @exomind/cli ...` |
+| `exomind: command not found` | 确认 npm 全局 bin 在 PATH;或用 `npx exomind ...` |
 | hook 不注入上下文 | 先登录;首次会拉 `/keywords` 建缓存(1h TTL),稍候 |
 | 颜色/乱码 | 非 TTY 自动关闭颜色;强制关设 `NO_COLOR=1` |
