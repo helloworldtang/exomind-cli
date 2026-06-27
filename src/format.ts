@@ -11,6 +11,11 @@ export function isJsonMode(): boolean {
   return JSON_MODE;
 }
 
+/** 进度提示到 stderr(不污染 stdout / JSON 输出)。 */
+export function hint(msg: string): void {
+  if (!isJsonMode()) process.stderr.write(msg + '\n');
+}
+
 /** 双模输出: json 模式打印 JSON,否则走 pretty。返回原始 data 便于测试。 */
 export function output<T>(data: T, pretty: () => void): T {
   if (JSON_MODE) {

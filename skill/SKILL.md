@@ -9,6 +9,21 @@ description: Interact with the ExoMind knowledge base — ingest insights/experi
 
 If a command fails with "未登录", run `exomind login` first.
 
+## 数据位置(重要 — 勿误报)
+
+**所有知识库数据都在服务器(d.youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅两处:
+- `~/.exomind/config.json` — 凭证
+- `~/.exomind/cache/` — hook 的关键词/实体缓存(从服务器拉的副本)
+
+摄入成功后输出 `✓ 已导入服务器知识库`。若要确认数据落地,用 `exomind search <关键词>` 复查。**不要向用户报告"已保存到 ~/my-wiki/entities/X.md"等本地路径——那是错的。**
+
+## 性能注意(ingest / query / synthesize 较慢)
+
+这三个命令在服务器端走多次 LLM 调用(抽取实体/关系、生成摘要),弱服务器上**长内容 1-3 分钟属正常**,CLI 会在 stderr 打 `⏳` 进度提示。
+- 默认超时:ingest/synthesize 5 分钟、query 3 分钟。需更长:设 `EXOMIND_TIMEOUT_MS=600000`。
+- **不要用 `timeout` 命令包裹**(macOS 默认无该命令;且 CLI 自己会等)。
+- 超长文本(>5 万字符)会被拒;拆成多条 ingest。
+
 ## Commands
 
 ### Save knowledge

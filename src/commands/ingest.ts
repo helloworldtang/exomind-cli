@@ -1,6 +1,6 @@
 /** exomind ingest — 导入知识。支持参数 / stdin / 文件。 */
-import type { ApiClient } from '../api';
-import { output, ok, green, dim, truncate } from '../format';
+import { opTimeout, type ApiClient } from '../api';
+import { output, ok, green, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
 
 export default async function ingest(
@@ -31,10 +31,11 @@ export default async function ingest(
   if (opts.title) body.title = opts.title;
   if (opts.tag && opts.tag.length) body.tags = opts.tag;
 
-  const result = await client.post('/ingest', body, { timeoutMs: 120000 });
+  hint('⏳ 摄入中: 服务器用 LLM 抽取实体/关系,长内容可能 1-3 分钟…');
+  const result = await client.post('/ingest', body, { timeoutMs: opTimeout(300000) });
 
   output(result, () => {
-    console.log(ok('已导入知识库'));
+    console.log(ok('已导入服务器知识库'));
     if (opts.title) console.log(dim(`  标题: ${opts.title}`));
     console.log(`  ${green('实体')}: ${result.entities ?? 0}   ${green('概念')}: ${result.concepts ?? 0}`);
     if (result.summary) console.log(dim(`  摘要: ${truncate(result.summary, 120)}`));

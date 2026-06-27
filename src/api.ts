@@ -1,6 +1,12 @@
 /** HTTP 客户端: 基于 Node 18+ 全局 fetch,统一 Bearer 认证 + 错误归一。 */
 import type { Config } from './config';
 
+/** 长操作超时(ingest/query/synthesize): 优先 EXOMIND_TIMEOUT_MS 环境变量,否则用默认值。 */
+export function opTimeout(defaultMs: number): number {
+  const n = Number(process.env.EXOMIND_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: string;

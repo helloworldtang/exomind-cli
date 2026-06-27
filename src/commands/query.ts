@@ -1,6 +1,6 @@
 /** exomind query <question> — LLM 问答。 */
-import type { ApiClient } from '../api';
-import { output, dim, cyan, truncate } from '../format';
+import { opTimeout, type ApiClient } from '../api';
+import { output, dim, cyan, truncate, hint } from '../format';
 
 export default async function query(
   client: ApiClient,
@@ -14,7 +14,8 @@ export default async function query(
   if (opts.tag?.length) body.tags = opts.tag;
   if (opts.model) body.model = opts.model;
 
-  const result = await client.post('/query', body, { timeoutMs: 120000 });
+  hint('⏳ 查询中: LLM 检索 + 生成,可能 1-2 分钟…');
+  const result = await client.post('/query', body, { timeoutMs: opTimeout(180000) });
 
   output(result, () => {
     console.log(result.answer || dim('(无回答)'));
