@@ -3,6 +3,7 @@
  * 通过 REST 与 ExoMind 知识库交互,替代 Windows 不可用的 MCP 客户端。
  */
 import { Command } from 'commander';
+import pkg from '../package.json' assert { type: 'json' };
 import { ApiClient, ApiError } from './api';
 import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
@@ -24,7 +25,7 @@ import login from './commands/login';
 import whoami from './commands/whoami';
 import installCmd from './commands/install';
 
-const VERSION = '0.1.0';
+const VERSION = pkg.version;
 
 type AnyOpts = Record<string, unknown>;
 
