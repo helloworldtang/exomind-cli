@@ -223,7 +223,7 @@ program
   .command('install')
   .description('安装 skill + hook + MCP(默认全装;--no-hook / --no-mcp 关闭某项)')
   .option('--no-hook', '不写 UserPromptSubmit hook')
-  .option('--no-mcp', '不写 MCP server 配置')
+  .option('--no-mcp', '不写 MCP server 配置(Claude Code + OpenCode 都不写)')
   .action(run(installCmd));
 
 async function main(): Promise<void> {

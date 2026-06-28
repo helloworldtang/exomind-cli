@@ -22,7 +22,30 @@ function backup(file: string): void {
   const bak = `${file}.bak-${Date.now()}`;
   try {
     fs.copyFileSync(file, bak);
-    console.log(dim(`  (已备份原配置 → ${path.basename(bak)})`));
+    console.log(dim(`  (已备份 → ${path.basename(bak)})`));
+  } catch {
+    return;
+  }
+  pruneBackups(file, 3);
+}
+
+/** 清理同一文件的旧 .bak-*,保留最近 keep 个(避免反复 install 堆积)。 */
+function pruneBackups(file: string, keep: number): void {
+  try {
+    const dir = path.dirname(file);
+    const prefix = path.basename(file) + '.bak-';
+    const olds = fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith(prefix))
+      .map((f) => ({ f, mt: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.mt - a.mt);
+    for (const o of olds.slice(keep)) {
+      try {
+        fs.unlinkSync(path.join(dir, o.f));
+      } catch {
+        /* 忽略单个删除失败 */
+      }
+    }
   } catch {
     /* 忽略 */
   }
@@ -71,17 +94,31 @@ export default async function install(
     console.log(dim('  重启 Claude Code 生效。hook 出错不会阻塞你的输入(错误只进 stderr)。'));
   }
 
-  // 3. 默认: 写 MCP server 配置到 ~/.claude.json(--no-mcp 关闭;补能力层,免手改 JSON)
+  // 3. 默认: 写 MCP server(Claude Code + OpenCode;--no-mcp 关闭;补能力层,免手改 JSON)
   if (opts.mcp !== false) {
-    const claudeJson = path.join(os.homedir(), '.claude.json');
-    backup(claudeJson);
-    const cc = (readJson(claudeJson) ?? {}) as Record<string, unknown>;
-    const mcpServers = (cc.mcpServers as Record<string, unknown>) ?? {};
-    mcpServers.exomind = { command: 'exomind', args: ['mcp'] };
-    cc.mcpServers = mcpServers;
-    fs.writeFileSync(claudeJson, JSON.stringify(cc, null, 2) + '\n');
+    // Claude Code: ~/.claude.json → mcpServers.exomind
+    const ccJson = path.join(os.homedir(), '.claude.json');
+    backup(ccJson);
+    const cc = (readJson(ccJson) ?? {}) as Record<string, unknown>;
+    const ccMcp = (cc.mcpServers as Record<string, unknown>) ?? {};
+    ccMcp.exomind = { command: 'exomind', args: ['mcp'] };
+    cc.mcpServers = ccMcp;
+    fs.writeFileSync(ccJson, JSON.stringify(cc, null, 2) + '\n');
+
+    // OpenCode: ~/.config/opencode/opencode.json → mcp.exomind
+    const ocJson = path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+    fs.mkdirSync(path.dirname(ocJson), { recursive: true });
+    backup(ocJson);
+    const oc = (readJson(ocJson) ?? {}) as Record<string, unknown>;
+    const ocMcp = (oc.mcp as Record<string, unknown>) ?? {};
+    ocMcp.exomind = { type: 'local', command: ['exomind', 'mcp'] };
+    oc.mcp = ocMcp;
+    fs.writeFileSync(ocJson, JSON.stringify(oc, null, 2) + '\n');
+
     console.log(ok('已配置 MCP server → exomind mcp'));
-    console.log(dim('  → ~/.claude.json (mcpServers.exomind);重启 Claude Code 后 Agent 拿到 mcp__exomind__* 工具'));
+    console.log(dim('  → Claude Code: ~/.claude.json (mcpServers.exomind)'));
+    console.log(dim('  → OpenCode: ~/.config/opencode/opencode.json (mcp.exomind)'));
+    console.log(dim('  重启对应 Agent → 拿到 mcp__exomind__* 工具'));
   }
 
   console.log(yellow('\n下一步:'));

@@ -61,14 +61,17 @@ exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
 
 完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
 
-## 关于 MCP 工具层(Claude Code 已默认装;OpenCode 需手写)
+**升级**:`npm i -g exomind@latest && exomind install`(幂等,刷新 skill/hook/mcp;`~/.exomind/` 的 config 与 manifest 保留)。注意:`npm i -g` 只换二进制(CLI+MCP 自动用新),**skill 是拷贝的,需 `exomind install` 才刷新**。
 
-`exomind install` 已默认把 MCP 写进 Claude Code 的 `~/.claude.json`(见上)。这里仅给**其它宿主/手写**场景:
+## 关于 MCP 工具层(Claude Code + OpenCode 都已默认装)
 
-- **OpenCode**(`opencode.json`):`{ "mcp": { "exomind": { "type": "local", "command": ["exomind", "mcp"] } } }`
-- **手写 Claude Code**:`~/.claude.json` 或项目 `.mcp.json`:`{ "mcpServers": { "exomind": { "command": "exomind", "args": ["mcp"] } } }`
+`exomind install` 一次写**两个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
+- **Claude Code**:`~/.claude.json` → `mcpServers.exomind`
+- **OpenCode**:`~/.config/opencode/opencode.json` → `mcp.exomind`
 
-`exomind mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。详见 [三层模式说明](./docs/mcp.md)。
+只关 MCP:`exomind install --no-mcp`(两个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
+
+`exomind mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
 
 ## 命令一览
 
