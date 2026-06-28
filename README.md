@@ -42,35 +42,33 @@ exomind feedback "entities/Redis.md" positive
 
 加 `--json` 获取机器可读输出(脚本/管道):`exomind --json stats | jq .total_nodes`。
 
-## 接入 Claude Code
+## 接入 Claude Code(一条命令,默认全装)
 
 ```bash
-exomind install --with-hook
+exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
+# 不想要某项: exomind install --no-hook  或  --no-mcp
 ```
 
-一行完成:① 装 Claude Code skill(教 Agent 何时用 CLI);② 写入 `UserPromptSubmit` hook 指向 `exomind hook`(幂等,自动备份,不影响其它工具)。重启 Claude Code 后:
+一行完成三层,免手改任何 JSON:
+- **① MCP 工具**(能力):写 `~/.claude.json` 的 `mcpServers.exomind` → Agent 拿到 `mcp__exomind__*` 确定性工具。
+- **② skill**(指导):拷到 `~/.claude/skills/exomind/`。
+- **③ hook**(闸门):写 `settings.json` 的 `UserPromptSubmit → exomind hook`。
 
-- 说 **`存档`** / **`jdit`** → 自动回顾会话、运行 `exomind ingest`。
+重启 Claude Code 后:
+- 说 **`存档`** / **`jdit`** → 自动回顾会话、摄入。
 - 提问涉及知识库已有实体 → 自动注入 `[ExoMind 知识库上下文]`。
-- 产出经验/踩坑/架构决策/性能数据/最佳实践 → 自动提示摄入(飞轮)。
+- Agent 需查询/摄入时 → 直接调 `mcp__exomind__*`(确定),或按 skill 跑 `exomind` CLI。
 
-即便不装 hook,skill 也会让 Agent 主动遵循飞轮规则。完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
+完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
 
-## 作为 MCP 工具接入(可选,更确定 + 跨宿主)
+## 关于 MCP 工具层(Claude Code 已默认装;OpenCode 需手写)
 
-`exomind mcp` 启动一个**本地 stdio MCP server**,把 ingest/query/search/entity/relations/stats 暴露为**typed tool**。Agent 直接调 tool(确定参数/返回),不必"读 skill → 拼 bash"。复用同一份凭证(`~/.exomind/config.json`),本地 stdio 所以三平台都能跑。
+`exomind install` 已默认把 MCP 写进 Claude Code 的 `~/.claude.json`(见上)。这里仅给**其它宿主/手写**场景:
 
-**Claude Code**(`~/.claude.json` 或项目 `.mcp.json`):
-```json
-{ "mcpServers": { "exomind": { "command": "exomind", "args": ["mcp"] } } }
-```
+- **OpenCode**(`opencode.json`):`{ "mcp": { "exomind": { "type": "local", "command": ["exomind", "mcp"] } } }`
+- **手写 Claude Code**:`~/.claude.json` 或项目 `.mcp.json`:`{ "mcpServers": { "exomind": { "command": "exomind", "args": ["mcp"] } } }`
 
-**OpenCode**(`opencode.json`):
-```json
-{ "mcp": { "exomind": { "type": "local", "command": ["exomind", "mcp"] } } }
-```
-
-> 与 skill+hook 并存,不冲突:MCP 提供"确定的工具调用",skill 提供"何时用的指导",hook 提供"每 prompt 的强制注入"。详见 [三层模式说明](./docs/mcp.md)。
+`exomind mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。详见 [三层模式说明](./docs/mcp.md)。
 
 ## 命令一览
 

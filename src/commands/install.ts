@@ -30,7 +30,7 @@ function backup(file: string): void {
 
 export default async function install(
   _client: ApiClient,
-  opts: { withHook?: boolean },
+  opts: { hook?: boolean; mcp?: boolean },
 ): Promise<void> {
   const claudeDir = path.join(os.homedir(), '.claude');
   const skillDestDir = path.join(claudeDir, 'skills', 'exomind');
@@ -44,8 +44,8 @@ export default async function install(
   console.log(ok('已安装 Claude Code skill'));
   console.log(dim(`  → ${skillDestDir}/SKILL.md`));
 
-  // 2. 可选: 写 UserPromptSubmit hook
-  if (opts.withHook) {
+  // 2. 默认: 写 UserPromptSubmit hook(--no-hook 关闭;commander 默认 true)
+  if (opts.hook !== false) {
     const settingsFile = path.join(claudeDir, 'settings.json');
     fs.mkdirSync(claudeDir, { recursive: true });
     backup(settingsFile);
@@ -71,7 +71,20 @@ export default async function install(
     console.log(dim('  重启 Claude Code 生效。hook 出错不会阻塞你的输入(错误只进 stderr)。'));
   }
 
+  // 3. 默认: 写 MCP server 配置到 ~/.claude.json(--no-mcp 关闭;补能力层,免手改 JSON)
+  if (opts.mcp !== false) {
+    const claudeJson = path.join(os.homedir(), '.claude.json');
+    backup(claudeJson);
+    const cc = (readJson(claudeJson) ?? {}) as Record<string, unknown>;
+    const mcpServers = (cc.mcpServers as Record<string, unknown>) ?? {};
+    mcpServers.exomind = { command: 'exomind', args: ['mcp'] };
+    cc.mcpServers = mcpServers;
+    fs.writeFileSync(claudeJson, JSON.stringify(cc, null, 2) + '\n');
+    console.log(ok('已配置 MCP server → exomind mcp'));
+    console.log(dim('  → ~/.claude.json (mcpServers.exomind);重启 Claude Code 后 Agent 拿到 mcp__exomind__* 工具'));
+  }
+
   console.log(yellow('\n下一步:'));
   console.log(dim('  1. 若未配置凭证: exomind login'));
-  console.log(dim('  2. 重启 Claude Code(若装了 hook)'));
+  console.log(dim('  2. 重启 Claude Code → skill + hook + mcp__exomind__* 全部生效'));
 }

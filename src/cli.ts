@@ -221,8 +221,9 @@ program
 // ── 安装 skill + hook ──
 program
   .command('install')
-  .description('安装 Claude Code skill(可选 --with-hook 写入 UserPromptSubmit)')
-  .option('--with-hook', '同时写入 ~/.claude/settings.json 的 hook')
+  .description('安装 skill + hook + MCP(默认全装;--no-hook / --no-mcp 关闭某项)')
+  .option('--no-hook', '不写 UserPromptSubmit hook')
+  .option('--no-mcp', '不写 MCP server 配置')
   .action(run(installCmd));
 
 async function main(): Promise<void> {
