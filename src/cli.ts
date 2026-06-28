@@ -8,6 +8,7 @@ import { ApiClient, ApiError } from './api';
 import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
 import { runHook } from './hook';
+import { runMcpServer } from './mcp';
 
 import ingest from './commands/ingest';
 import query from './commands/query';
@@ -199,6 +200,22 @@ program
       process.stderr.write(`[exomind hook] ${e instanceof Error ? e.message : String(e)}\n`);
     }
     process.exit(0);
+  });
+
+// ── MCP server(把核心命令暴露为 typed tool,补"能力层")──
+program
+  .command('mcp')
+  .description('启动 stdio MCP server(供 Claude Code/OpenCode/Cursor 作为 MCP 工具接入)')
+  .action(async (...a: unknown[]) => {
+    const command = a[a.length - 1] as Command;
+    const root = rootOptions(command);
+    setJsonMode(false);
+    const cfg = resolveConfig({
+      baseUrl: root.baseUrl as string | undefined,
+      apiKey: root.apiKey as string | undefined,
+    });
+    const client = new ApiClient(cfg);
+    await runMcpServer(client);
   });
 
 // ── 安装 skill + hook ──

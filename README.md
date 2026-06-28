@@ -56,6 +56,22 @@ exomind install --with-hook
 
 即便不装 hook,skill 也会让 Agent 主动遵循飞轮规则。完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
 
+## 作为 MCP 工具接入(可选,更确定 + 跨宿主)
+
+`exomind mcp` 启动一个**本地 stdio MCP server**,把 ingest/query/search/entity/relations/stats 暴露为**typed tool**。Agent 直接调 tool(确定参数/返回),不必"读 skill → 拼 bash"。复用同一份凭证(`~/.exomind/config.json`),本地 stdio 所以三平台都能跑。
+
+**Claude Code**(`~/.claude.json` 或项目 `.mcp.json`):
+```json
+{ "mcpServers": { "exomind": { "command": "exomind", "args": ["mcp"] } } }
+```
+
+**OpenCode**(`opencode.json`):
+```json
+{ "mcp": { "exomind": { "type": "local", "command": ["exomind", "mcp"] } } }
+```
+
+> 与 skill+hook 并存,不冲突:MCP 提供"确定的工具调用",skill 提供"何时用的指导",hook 提供"每 prompt 的强制注入"。详见 [三层模式说明](./docs/mcp.md)。
+
 ## 命令一览
 
 | 命令 | 说明 |
