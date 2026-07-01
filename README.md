@@ -42,6 +42,20 @@ exomind feedback "entities/Redis.md" positive
 
 加 `--json` 获取机器可读输出(脚本/管道):`exomind --json stats | jq .total_nodes`。
 
+## 凭证管理
+
+`exomind login` 输入的凭证持久化到本地,后续命令自动读取,无需重复登录。
+
+- **存储位置**:`~/.exomind/config.json`(明文 JSON),文件权限 `0600`(仅所有者可读写;Windows 无 POSIX 权限则忽略)。
+- **凭证类型**:服务端 `auth_middleware` 同时接受 **API Key**(从 `d.youhuale.cn/ui/account` 复制)与 **GitHub token**(`gh_` 前缀);两者统一以 `Authorization: Bearer` 发送,CLI 不关心是哪种。
+- **读取优先级**:`config.json` 的 `api_key` → 环境变量 `EXOMIND_API_KEY` → 旧版遗留文件 `~/.claude/scripts/.exomind-api-key`(向后兼容老安装)。三者任一存在即免登录。
+- **CI / 免登录**:只设环境变量 `EXOMIND_API_KEY`(可选 `EXOMIND_BASE_URL`)即可,完全不写本地文件。`config.json` 优先级高于环境变量,故已 `login` 的机器需 `--api-key` 才能临时覆盖。
+- **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `exomind whoami` 复核。
+- **换号 / 登出**:重新 `exomind login` 覆盖旧凭证;彻底登出删 `~/.exomind/config.json`。
+- **安全提醒**:文件是**明文**,任何能读你 home 目录的进程都能拿到 key。共享机器 / 不信任环境请用环境变量,不要用 `login`。
+
+> 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `exomind login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `exomind login` 的 prompt 读取不走 shell 历史。
+
 ## 接入 Claude Code(一条命令,默认全装)
 
 ```bash
