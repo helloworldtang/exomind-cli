@@ -10,10 +10,19 @@ export function opTimeout(defaultMs: number): number {
 export class ApiError extends Error {
   status: number;
   detail: string;
-  constructor(status: number, detail: string) {
+  headers: Record<string, string>;
+  body: any;
+  constructor(
+    status: number,
+    detail: string,
+    headers: Record<string, string> = {},
+    body: any = null,
+  ) {
     super(`HTTP ${status}: ${detail}`);
     this.status = status;
     this.detail = detail;
+    this.headers = headers;
+    this.body = body;
   }
 }
 
@@ -67,14 +76,19 @@ export class ApiClient {
       });
       const text = await res.text();
       if (!res.ok) {
+        const headers: Record<string, string> = {};
+        res.headers?.forEach((v, k) => {
+          headers[k.toLowerCase()] = v;
+        });
         let detail = text || res.statusText;
+        let body: any = null;
         try {
-          const j = JSON.parse(text);
-          detail = j.detail || j.message || JSON.stringify(j);
+          body = JSON.parse(text);
+          detail = body.detail || body.message || JSON.stringify(body);
         } catch {
           /* 保留原始文本 */
         }
-        throw new ApiError(res.status, String(detail).slice(0, 800));
+        throw new ApiError(res.status, String(detail).slice(0, 800), headers, body);
       }
       if (opts.text) return text;
       try {

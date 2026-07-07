@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ApiClient } from './api';
-import { opTimeout } from './api';
+import { opTimeout, ApiError } from './api';
 import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, type Manifest } from './manifest';
 import { readFileText } from './io';
 import { output, green, red, dim } from './format';
@@ -82,6 +82,65 @@ export function planIngestest(files: string[], manifest: Manifest, force: boolea
   return { toIngest, toSkip };
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** 是否处于"挂起到次日"状态(供 SIGINT handler 判断是否保存进度)。 */
+let suspended = false;
+
+/** 单文件摄入 + 限流重试:
+ *  - 429 rate_limit(并发超限): 读 Retry-After 秒级退避,最多 5 次。
+ *  - 429 daily_quota(配额超限): 挂起到次日 0 点(reset epoch)自动续跑,最多 3 个自然日防失控。
+ *  - 其他错误: 原样抛出(由调用方计入 failed)。 */
+export async function ingestWithRetry(
+  client: ApiClient,
+  payload: unknown,
+  timeoutMs: number,
+): Promise<any> {
+  let rateAttempts = 0;
+  let quotaWaits = 0;
+  while (true) {
+    try {
+      return await client.post('/ingest', payload, { timeoutMs });
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 429) throw e;
+      const type = e.body?.type;
+      if (type === 'daily_quota') {
+        if (++quotaWaits > 3) throw new ApiError(429, '配额连续 3 个自然日未恢复,放弃');
+        await suspendUntilMidnight(Number(e.body?.reset ?? 0));
+        continue;
+      }
+      if (type === 'rate_limit') {
+        if (++rateAttempts >= 5) throw new ApiError(429, '并发限流,重试 5 次仍失败');
+        const retry = Number(e.headers['retry-after'] ?? e.body?.retry_after ?? 5);
+        process.stderr.write(dim(`  ⏸ 并发限流,${retry}s 后重试\n`));
+        await sleep(retry * 1000);
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+/** 挂起到次日 0 点(由 reset epoch 指定),期间打印剩余分钟倒计时。 */
+async function suspendUntilMidnight(resetEpoch: number): Promise<void> {
+  suspended = true;
+  const now = Date.now();
+  const waitMs = resetEpoch > 0 ? Math.max(1000, resetEpoch * 1000 - now) : 60 * 1000;
+  process.stderr.write(
+    dim(`  ⏸ 今日配额已满,挂起到次日 0 点续跑(约 ${Math.ceil(waitMs / 60000)} 分钟)\n`),
+  );
+  process.stderr.write(dim('  Ctrl+C 可安全退出(已保存进度),次日重跑同命令即可续跑\n'));
+  const start = Date.now();
+  while (Date.now() - start < waitMs) {
+    const remaining = waitMs - (Date.now() - start);
+    await sleep(Math.min(60000, remaining));
+    const remainMin = Math.ceil((waitMs - (Date.now() - start)) / 60000);
+    if (remainMin > 0) process.stderr.write(`\r  ${dim(`剩余约 ${remainMin} 分钟`)}        `);
+  }
+  process.stderr.write(`\n  ${dim('到达 0 点,继续摄入…')}\n`);
+  suspended = false;
+}
+
 /** 执行目录增量摄入: 串行(弱服务器友好),每文件后保存 manifest(崩溃安全)。 */
 export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: string): Promise<void> {
   const files = walkDir(dir, !!opts.recursive, opts.pattern || '*.md');
@@ -97,36 +156,49 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
     `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}\n`,
   );
 
+  // 挂起期间 Ctrl+C:保存已摄入进度,次日重跑同命令续跑
+  const onSigInt = (): void => {
+    if (suspended) {
+      saveManifest(manifest);
+      process.stderr.write('\n已保存进度,退出。次日重跑同命令即可续跑。\n');
+    }
+    process.exit(130);
+  };
+  process.on('SIGINT', onSigInt);
+
   let added = 0;
   let updated = 0;
   let failed = 0;
-  for (let i = 0; i < plan.toIngest.length; i++) {
-    const f = plan.toIngest[i];
-    const prev = manifest[f.path];
-    process.stderr.write(`⏳ [${i + 1}/${plan.toIngest.length}] ${path.basename(f.path)}…\n`);
-    try {
-      const res = await client.post(
-        '/ingest',
-        { content: f.content, title: f.title, tags: opts.tag },
-        { timeoutMs: opTimeout(300000) },
-      );
-      recordFile(manifest, f.path, f.content, f.title);
-      saveManifest(manifest);
-      if (prev) {
-        updated++;
-        process.stderr.write(`  ${green('✓')} 更新 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
-      } else {
-        added++;
-        process.stderr.write(`  ${green('✓')} 新增 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
+  try {
+    for (let i = 0; i < plan.toIngest.length; i++) {
+      const f = plan.toIngest[i];
+      const prev = manifest[f.path];
+      process.stderr.write(`⏳ [${i + 1}/${plan.toIngest.length}] ${path.basename(f.path)}…\n`);
+      try {
+        const res = await ingestWithRetry(
+          client,
+          { content: f.content, title: f.title, tags: opts.tag },
+          opTimeout(300000),
+        );
+        recordFile(manifest, f.path, f.content, f.title);
+        saveManifest(manifest);
+        if (prev) {
+          updated++;
+          process.stderr.write(`  ${green('✓')} 更新 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
+        } else {
+          added++;
+          process.stderr.write(`  ${green('✓')} 新增 — 实体 ${res.entities ?? 0}/概念 ${res.concepts ?? 0}\n`);
+        }
+      } catch (e) {
+        failed++;
+        process.stderr.write(`  ${red('✗')} ${(e as Error).message}\n`);
       }
-    } catch (e) {
-      failed++;
-      process.stderr.write(`  ${red('✗')} ${(e as Error).message}\n`);
     }
+    cleanupStale(manifest, dir, files);
+    saveManifest(manifest);
+  } finally {
+    process.removeListener('SIGINT', onSigInt);
   }
-
-  cleanupStale(manifest, dir, files);
-  saveManifest(manifest);
 
   const allUpToDate = added + updated === 0 && plan.toSkip.length > 0 && failed === 0;
   output(

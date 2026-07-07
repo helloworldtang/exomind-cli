@@ -4,8 +4,11 @@ import { ApiClient, ApiError } from '../src/api';
 
 const origFetch = global.fetch;
 
-function mockFetch(impl: (url: string, init?: RequestInit) => { ok: boolean; status: number; statusText?: string; text: () => Promise<string> }): void {
-  global.fetch = ((url: string, init?: RequestInit) => Promise.resolve(impl(url, init))) as typeof fetch;
+function mockFetch(impl: (url: string, init?: RequestInit) => { ok: boolean; status: number; statusText?: string; headers?: Record<string, string>; text: () => Promise<string> }): void {
+  global.fetch = ((url: string, init?: RequestInit) => {
+    const r = impl(url, init);
+    return Promise.resolve({ ...r, headers: new Headers(r.headers || {}) });
+  }) as typeof fetch;
 }
 
 afterEach(() => {
@@ -64,5 +67,24 @@ describe('ApiClient', () => {
     assert.equal(h.Authorization, 'Bearer sk_test');
     assert.equal(h['Content-Type'], 'application/json');
     assert.equal(JSON.parse(body as string).content, 'hello');
+  });
+
+  test('非 2xx 收集响应头(小写)+ 解析 body', async () => {
+    mockFetch(() => ({
+      ok: false, status: 429, statusText: 'Too Many Requests',
+      headers: { 'Retry-After': '5', 'RateLimit-Reset': '999' },
+      text: async () => JSON.stringify({ detail: '配额满', type: 'daily_quota', reset: 999 }),
+    }));
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    await assert.rejects(
+      () => c.get('/ingest'),
+      (e: unknown) => {
+        if (!(e instanceof ApiError) || e.status !== 429) return false;
+        const ae = e as ApiError;
+        return ae.headers['retry-after'] === '5'
+          && ae.headers['ratelimit-reset'] === '999'
+          && ae.body?.type === 'daily_quota';
+      },
+    );
   });
 });

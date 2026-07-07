@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { recordFile, type Manifest } from '../src/manifest';
+import { ApiError } from '../src/api';
 
 type Mod = typeof import('../src/ingest_dir');
 let id!: Mod;
@@ -89,5 +90,43 @@ describe('ingest_dir', () => {
     const plan = id.planIngestest([f], man, false);
     assert.equal(plan.toSkip.length, 1, '应跳过已摄文件');
     assert.equal(plan.toIngest.length, 0);
+  });
+
+  test('ingestWithRetry: rate_limit 退避后重试成功', async () => {
+    let calls = 0;
+    const fakeClient = {
+      post: async () => {
+        calls++;
+        if (calls === 1) throw new ApiError(429, '并发', { 'retry-after': '0' }, { type: 'rate_limit', retry_after: 0 });
+        return { entities: 1, concepts: 2 };
+      },
+    };
+    const r = await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
+    assert.equal(r.entities, 1);
+    assert.equal(calls, 2);
+  });
+
+  test('ingestWithRetry: 非 429 错误直接抛(不计重试)', async () => {
+    const fakeClient = { post: async () => { throw new ApiError(500, 'LLM 截断'); } };
+    await assert.rejects(
+      () => id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000),
+      (e: unknown) => e instanceof ApiError && (e as ApiError).status === 500,
+    );
+  });
+
+  test('ingestWithRetry: daily_quota 挂起后重试成功', async () => {
+    let calls = 0;
+    const fakeClient = {
+      post: async () => {
+        calls++;
+        if (calls === 1) {
+          throw new ApiError(429, '配额满', {}, { type: 'daily_quota', reset: Math.floor(Date.now() / 1000) + 1 });
+        }
+        return { entities: 5 };
+      },
+    };
+    const r = await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
+    assert.equal(r.entities, 5);
+    assert.equal(calls, 2);
   });
 });
