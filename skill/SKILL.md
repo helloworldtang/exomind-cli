@@ -5,7 +5,7 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 
 # ExoMind CLI
 
-`exomind` is a cross-platform CLI that talks to your ExoMind knowledge base over REST. It replaces the MCP client (which is unreliable on Windows). After a one-time `exomind login` (paste the API Key from `d.youhuale.cn/ui/account`), every command works identically on Windows / macOS / Linux.
+`exomind` is a cross-platform CLI that talks to your ExoMind knowledge base over REST. It replaces the MCP client (which is unreliable on Windows). After a one-time `exomind login` (paste the API Key from `youhuale.cn/ui/account`), every command works identically on Windows / macOS / Linux.
 
 If a command fails with "未登录", run `exomind login` first.
 
@@ -20,7 +20,7 @@ If a command fails with "未登录", run `exomind login` first.
 
 ## 数据位置(重要 — 勿误报)
 
-**所有知识库数据都在服务器(d.youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
+**所有知识库数据都在服务器(youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
 - `~/.exomind/config.json` — 凭证
 - `~/.exomind/cache/` — hook 的关键词/实体缓存(从服务器拉的副本)
 - `~/.exomind/manifest.json` — 目录增量摄入的内容哈希清单(去重用,非知识库本身)

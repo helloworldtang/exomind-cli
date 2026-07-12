@@ -8,7 +8,7 @@ export interface Config {
   api_key: string;
 }
 
-export const DEFAULT_BASE_URL = 'https://d.youhuale.cn';
+export const DEFAULT_BASE_URL = 'https://youhuale.cn';
 
 export const CONFIG_DIR = path.join(os.homedir(), '.exomind');
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');

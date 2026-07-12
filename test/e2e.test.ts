@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 
 const KEY = process.env.EXOMIND_API_KEY;
-const BASE = process.env.EXOMIND_BASE_URL || 'https://d.youhuale.cn';
+const BASE = process.env.EXOMIND_BASE_URL || 'https://youhuale.cn';
 const DIST = path.resolve(process.cwd(), 'dist', 'cli.js');
 
 const skipReason: string | false = !KEY

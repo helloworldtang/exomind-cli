@@ -22,7 +22,7 @@ export default async function login(
   let token = opts.apiKey || '';
 
   if (!token) {
-    console.log(dim('从 d.youhuale.cn/ui/account (登录后) 复制 API Key 或登录 token。'));
+    console.log(dim('从 youhuale.cn/ui/account (登录后) 复制 API Key 或登录 token。'));
     token = await prompt('凭证: ');
   }
   if (!token) throw new Error('未提供凭证');

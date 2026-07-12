@@ -12,7 +12,7 @@
 
 ```bash
 npm install -g exomind
-exomind login            # 粘贴 d.youhuale.cn/ui/account 的 API Key
+exomind login            # 粘贴 youhuale.cn/ui/account 的 API Key
 exomind install --with-hook   # 装 Claude Code skill + UserPromptSubmit hook
 ```
 

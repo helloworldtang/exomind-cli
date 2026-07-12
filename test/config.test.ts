@@ -46,7 +46,7 @@ describe('config', () => {
     fs.rmSync(mod.CONFIG_FILE, { force: true });
     fs.rmSync(mod.LEGACY_KEY_FILE, { force: true });
     const cfg = mod.loadConfig();
-    assert.equal(cfg.base_url, 'https://d.youhuale.cn');
+    assert.equal(cfg.base_url, 'https://youhuale.cn');
   });
 
   test('命令行 override 优先级最高', () => {
