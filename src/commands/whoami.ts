@@ -27,7 +27,16 @@ export default async function whoami(client: ApiClient): Promise<void> {
       console.log(dim(`  服务器: ${cfg.base_url}`));
       console.log(dim(`  凭证: ${hint} (${kind})`));
       if (me.authenticated) {
-        console.log(dim(`  用户: ${me.name || me.login || '-'} (tenant: ${me.tenant_id || '-'})`));
+        // tenant_id 即 user_id（ExoMind 用 auth 的 user_id 做租户隔离键）
+        const userId = me.tenant_id || '-';
+        const display = me.name || me.login || '';
+        if (display) {
+          console.log(dim(`  用户: ${display} (用户ID: ${userId})`));
+        } else if (me.method === 'api_key') {
+          console.log(dim(`  用户ID: ${userId}（API Key 不携带用户名）`));
+        } else {
+          console.log(dim(`  用户ID: ${userId}`));
+        }
       }
     },
   );
