@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { ApiClient } from '../api';
 import { ok, dim, yellow } from '../format';
+import { DEFAULT_BASE_URL } from '../config';
 
 // CJS 输出: __dirname = dist/,上一级即包根 → skill/SKILL.md
 const PKG_ROOT = path.resolve(__dirname, '..');
@@ -49,6 +50,19 @@ function pruneBackups(file: string, keep: number): void {
   } catch {
     /* 忽略 */
   }
+}
+
+/** 从指定 JSON 文件移除 mcpServers.exomind（清理会覆盖 stdio 的残留 SSE/旧条目）。幂等，返回是否改动。 */
+function purgeMcpExomind(file: string): boolean {
+  const d = readJson(file);
+  if (!d) return false;
+  const grp = d.mcpServers as Record<string, unknown> | undefined;
+  if (!grp || !grp.exomind) return false;
+  delete grp.exomind;
+  if (Object.keys(grp).length === 0) delete d.mcpServers;
+  backup(file);
+  fs.writeFileSync(file, JSON.stringify(d, null, 2) + '\n');
+  return true;
 }
 
 export default async function install(
@@ -115,10 +129,33 @@ export default async function install(
     oc.mcp = ocMcp;
     fs.writeFileSync(ocJson, JSON.stringify(oc, null, 2) + '\n');
 
+    // 清理会覆盖 stdio 的残留 exomind MCP 条目（settings.json mcpServers + 项目级 .mcp.json）
+    // 否则项目级/用户级 SSE 等旧条目优先级更高，会盖住 stdio → MCP 401
+    const purged: string[] = [];
+    if (purgeMcpExomind(path.join(claudeDir, 'settings.json'))) purged.push('~/.claude/settings.json');
+    let curDir = process.cwd();
+    for (let i = 0; i < 12 && curDir !== path.dirname(curDir); i++) {
+      const f = path.join(curDir, '.mcp.json');
+      if (fs.existsSync(f) && purgeMcpExomind(f)) purged.push(f.replace(os.homedir(), '~'));
+      curDir = path.dirname(curDir);
+    }
+    if (purged.length) console.log(dim(`  → 清理残留 exomind MCP 条目（避免覆盖 stdio）: ${purged.join(', ')}`));
+
     console.log(ok('已配置 MCP server → exomind mcp'));
     console.log(dim('  → Claude Code: ~/.claude.json (mcpServers.exomind)'));
     console.log(dim('  → OpenCode: ~/.config/opencode/opencode.json (mcp.exomind)'));
     console.log(dim('  重启对应 Agent → 拿到 mcp__exomind__* 工具'));
+  }
+
+  // 4. 迁移过时 base_url（d.youhuale.cn → 默认域），让 stdio MCP 子进程用最新域名
+  const cfgFile = path.join(os.homedir(), '.exomind', 'config.json');
+  const cfg = readJson(cfgFile);
+  if (cfg && typeof cfg.base_url === 'string' && cfg.base_url.includes('d.youhuale.cn')) {
+    backup(cfgFile);
+    cfg.base_url = DEFAULT_BASE_URL;
+    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + '\n');
+    console.log(ok(`已迁移 base_url: d.youhuale.cn → ${DEFAULT_BASE_URL}`));
+    console.log(dim('  (stdio MCP 子进程读此配置，重启 Agent 后用新域名)'));
   }
 
   console.log(yellow('\n下一步:'));
