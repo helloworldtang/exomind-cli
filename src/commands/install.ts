@@ -2,6 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { spawn } from 'node:child_process';
 import type { ApiClient } from '../api';
 import { ok, dim, yellow } from '../format';
 import { DEFAULT_BASE_URL, loadConfig } from '../config';
@@ -63,6 +64,53 @@ function purgeMcpExomind(file: string): boolean {
   backup(file);
   fs.writeFileSync(file, JSON.stringify(d, null, 2) + '\n');
   return true;
+}
+
+/** 自检：spawn `exomind mcp` 发 initialize，验证 MCP 服务端能启动并响应（抓"升级把 MCP 搞坏"）。 */
+function checkMcp(timeoutMs = 6000): Promise<{ ok: boolean; detail: string }> {
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn('exomind', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'], shell: true });
+    } catch (e) {
+      resolve({ ok: false, detail: `无法启动: ${e instanceof Error ? e.message : e}` });
+      return;
+    }
+    let out = '';
+    let done = false;
+    const finish = (r: { ok: boolean; detail: string }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        /* 忽略 */
+      }
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish({ ok: false, detail: '超时未响应 initialize' }), timeoutMs);
+    child.stdout?.on('data', (d: Buffer) => {
+      out += d.toString();
+      if (out.includes('"serverInfo"')) finish({ ok: true, detail: 'initialize 响应正常' });
+    });
+    child.on('error', (e: Error) => finish({ ok: false, detail: `启动失败: ${e.message}` }));
+    child.on('close', () => {
+      if (!out.includes('"serverInfo"')) finish({ ok: false, detail: '未响应 initialize 即退出' });
+    });
+    try {
+      child.stdin?.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'install-check', version: '1' } },
+          id: 1,
+        }) + '\n',
+      );
+    } catch {
+      finish({ ok: false, detail: '写入 stdin 失败' });
+    }
+  });
 }
 
 export default async function install(
@@ -158,7 +206,7 @@ export default async function install(
     console.log(dim('  (stdio MCP 子进程读此配置，重启 Agent 后用新域名)'));
   }
 
-  // 5. 下一步：根据凭证状态显示不同内容（升级场景 vs 首次安装）
+  // 5. 可用性自检（避免"升级提示成功、实际把功能搞坏了用户却不知道"）
   const live = loadConfig();
   const keyHint = live.api_key ? `${live.api_key.slice(0, 8)}…${live.api_key.slice(-4)}` : '';
   let me: { authenticated?: boolean; tenant_id?: string; login?: string } | null = null;
@@ -166,19 +214,27 @@ export default async function install(
     try {
       me = (await client.get('/auth/me')) as { authenticated?: boolean; tenant_id?: string; login?: string };
     } catch {
-      me = null; // key 无效 / 网络错 → 走"未能验证"分支
+      me = null; // key 无效 / 网络错
     }
   }
-  console.log(yellow('\n下一步:'));
-  if (me && me.authenticated) {
-    console.log(ok(`凭证有效：${live.base_url}（${keyHint}）`));
-    console.log(dim(`  身份：tenant ${me.tenant_id}${me.login ? ' · ' + me.login : ''}`));
-    console.log(dim('  升级完成 → 重启 Claude Code（skill/hook/MCP 启动时载入、不热重载）即生效'));
-  } else if (live.api_key) {
-    console.log(yellow(`已配置 API Key（${keyHint}），但未能验证（${live.base_url}）`));
-    console.log(dim('  运行 exomind whoami 核验；重启 Claude Code → mcp__exomind__* 生效'));
+  const mcp = live.api_key ? await checkMcp() : { ok: false, detail: '未配置 API Key' };
+
+  console.log(yellow('\n可用性自检:'));
+  if (!live.api_key) {
+    console.log(dim('  （未配置 API Key，跳过自检；exomind login 后重跑 install 可自检）'));
   } else {
+    console.log(me && me.authenticated ? ok('  服务器连通 + 鉴权有效') : yellow('  ✗ 服务器连通/鉴权异常 → exomind whoami 核验'));
+    console.log(mcp.ok ? ok(`  MCP 服务端可用（${mcp.detail}）`) : yellow(`  ✗ MCP 服务端异常：${mcp.detail}`));
+  }
+
+  console.log(yellow('\n下一步:'));
+  if (!live.api_key) {
     console.log(dim('  1. exomind login（粘贴 API Key）'));
     console.log(dim('  2. 重启 Claude Code（加载 skill/hook/MCP）→ mcp__exomind__* 生效'));
+  } else if (me && me.authenticated && mcp.ok) {
+    console.log(ok(`凭证有效：${live.base_url}（${keyHint}）· tenant ${me.tenant_id}`));
+    console.log(dim('  自检全过 → 重启 Claude Code（skill/hook/MCP 启动时载入）即生效'));
+  } else {
+    console.log(yellow('自检有异常，请按上方 ✗ 提示核验后再重启使用。'));
   }
 }
