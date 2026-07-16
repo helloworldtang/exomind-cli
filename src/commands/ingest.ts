@@ -16,6 +16,7 @@ export default async function ingest(
     recursive?: boolean;
     pattern?: string;
     force?: boolean;
+    concurrency?: number;
   },
   args: string[],
 ): Promise<void> {

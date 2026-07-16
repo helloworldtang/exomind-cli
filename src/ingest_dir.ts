@@ -13,6 +13,7 @@ export interface DirOpts {
   recursive?: boolean;
   pattern?: string;
   force?: boolean;
+  concurrency?: number;
 }
 
 /** 简单 glob → RegExp,仅用于文件名匹配(* → .*, ? → .)。 */
@@ -82,6 +83,33 @@ export function planIngestest(files: string[], manifest: Manifest, force: boolea
   return { toIngest, toSkip };
 }
 
+/** 并发执行 worker,限制同时在途数量(共享游标模式:N 个 worker 争抢递增游标取任务)。
+ *  JS 单线程 + worker 内 recordFile/saveManifest 为连续同步调用 → manifest 写入天然串行,无竞争。
+ *  弱服务器友好:concurrency 由调用方控制;过高触发服务端 429 rate_limit 时,
+ *  ingestWithRetry 的 Retry-After 退避会自适应回压。 */
+export async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  const size = items.length;
+  const n = Math.max(1, Math.min(concurrency, size));
+  let next = 0;
+  const runners: Promise<void>[] = [];
+  for (let w = 0; w < n; w++) {
+    runners.push(
+      (async () => {
+        while (true) {
+          const idx = next++;
+          if (idx >= size) break;
+          await worker(items[idx], idx);
+        }
+      })(),
+    );
+  }
+  await Promise.all(runners);
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** 是否处于"挂起到次日"状态(供 SIGINT handler 判断是否保存进度)。 */
@@ -141,7 +169,8 @@ async function suspendUntilMidnight(resetEpoch: number): Promise<void> {
   suspended = false;
 }
 
-/** 执行目录增量摄入: 串行(弱服务器友好),每文件后保存 manifest(崩溃安全)。 */
+/** 执行目录增量摄入: 有限并发(默认 3,弱服务器友好),每文件完成后保存 manifest(崩溃安全)。
+ *  并发下 manifest 写入靠 JS 单线程 + recordFile/saveManifest 连续同步调用保证串行。 */
 export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: string): Promise<void> {
   const files = walkDir(dir, !!opts.recursive, opts.pattern || '*.md');
   if (!files.length) {
@@ -152,8 +181,9 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
   const manifest = loadManifest();
   const plan = planIngestest(files, manifest, !!opts.force);
   const total = files.length;
+  const concurrency = Math.max(1, opts.concurrency ?? 3);
   process.stderr.write(
-    `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}\n`,
+    `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}(并发 ${concurrency})\n`,
   );
 
   // 挂起期间 Ctrl+C:保存已摄入进度,次日重跑同命令续跑
@@ -169,17 +199,20 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
   let added = 0;
   let updated = 0;
   let failed = 0;
+  let started = 0;
+  const queue = plan.toIngest;
   try {
-    for (let i = 0; i < plan.toIngest.length; i++) {
-      const f = plan.toIngest[i];
+    await mapWithConcurrency(queue, concurrency, async (f) => {
       const prev = manifest[f.path];
-      process.stderr.write(`⏳ [${i + 1}/${plan.toIngest.length}] ${path.basename(f.path)}…\n`);
+      const seq = ++started;
+      process.stderr.write(`⏳ [${seq}/${queue.length}] ${path.basename(f.path)}…\n`);
       try {
         const res = await ingestWithRetry(
           client,
           { content: f.content, title: f.title, tags: opts.tag },
           opTimeout(300000),
         );
+        // recordFile + saveManifest 连续同步调用 → manifest 写入串行,并发安全
         recordFile(manifest, f.path, f.content, f.title);
         saveManifest(manifest);
         if (prev) {
@@ -193,7 +226,7 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
         failed++;
         process.stderr.write(`  ${red('✗')} ${(e as Error).message}\n`);
       }
-    }
+    });
     cleanupStale(manifest, dir, files);
     saveManifest(manifest);
   } finally {

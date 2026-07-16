@@ -129,4 +129,22 @@ describe('ingest_dir', () => {
     assert.equal(r.entities, 5);
     assert.equal(calls, 2);
   });
+
+  test('mapWithConcurrency: 全部执行 + 并发受限 + 无遗漏', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const processed: number[] = [];
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    await id.mapWithConcurrency(items, 3, async (item) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      processed.push(item);
+      inFlight--;
+    });
+    assert.equal(processed.length, 10, '全部 item 已处理');
+    assert.ok(maxInFlight <= 3, `并发不超过 3(峰值 ${maxInFlight})`);
+    assert.ok(maxInFlight >= 2, `确实并发(峰值 ${maxInFlight})`);
+    assert.deepEqual([...processed].sort((a, b) => a - b), items, '无遗漏无重复');
+  });
 });

@@ -107,6 +107,12 @@ program
   .option('-r, --recursive', '递归子目录(配合 --dir)')
   .option('--pattern <glob>', '文件名匹配,默认 *.md', '*.md')
   .option('--force', '忽略 manifest,强制全量重摄(配合 --dir)')
+  .option(
+    '-c, --concurrency <n>',
+    '并发摄入数(配合 --dir,默认 3,弱服务器友好)',
+    (v: string) => parseInt(v, 10) || 3,
+    3,
+  )
   .action(run(ingest));
 
 // ── 查询 ──
