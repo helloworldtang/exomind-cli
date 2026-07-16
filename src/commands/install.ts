@@ -71,7 +71,8 @@ function checkMcp(timeoutMs = 6000): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn('exomind', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'], shell: true });
+      // shell: 仅 Windows 需(找 .cmd/.exe);Linux/macOS 直接 exec,避免 Node22 DEP0190 警告
+      child = spawn('exomind', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32' });
     } catch (e) {
       resolve({ ok: false, detail: `无法启动: ${e instanceof Error ? e.message : e}` });
       return;
@@ -223,7 +224,12 @@ export default async function install(
   if (!live.api_key) {
     console.log(dim('  （未配置 API Key，跳过自检；exomind login 后重跑 install 可自检）'));
   } else {
-    console.log(me && me.authenticated ? ok('  服务器连通 + 鉴权有效') : yellow('  ✗ 服务器连通/鉴权异常 → exomind whoami 核验'));
+    // 凭证细节(tenant/keyHint)并入自检行,只在「自检」出现一次
+    console.log(
+      me && me.authenticated
+        ? ok(`  服务器连通 + 鉴权有效（tenant ${me.tenant_id} · ${keyHint}）`)
+        : yellow('  ✗ 服务器连通/鉴权异常 → exomind whoami 核验'),
+    );
     console.log(mcp.ok ? ok(`  MCP 服务端可用（${mcp.detail}）`) : yellow(`  ✗ MCP 服务端异常：${mcp.detail}`));
   }
 
@@ -232,7 +238,6 @@ export default async function install(
     console.log(dim('  1. exomind login（粘贴 API Key）'));
     console.log(dim('  2. 重启 Claude Code（加载 skill/hook/MCP）→ mcp__exomind__* 生效'));
   } else if (me && me.authenticated && mcp.ok) {
-    console.log(ok(`凭证有效：${live.base_url}（${keyHint}）· tenant ${me.tenant_id}`));
     console.log(dim('  自检全过 → 重启 Claude Code（skill/hook/MCP 启动时载入）即生效'));
   } else {
     console.log(yellow('自检有异常，请按上方 ✗ 提示核验后再重启使用。'));
