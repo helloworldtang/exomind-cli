@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { ApiClient } from '../api';
 import { ok, dim, yellow } from '../format';
-import { DEFAULT_BASE_URL } from '../config';
+import { DEFAULT_BASE_URL, loadConfig } from '../config';
 
 // CJS 输出: __dirname = dist/,上一级即包根 → skill/SKILL.md
 const PKG_ROOT = path.resolve(__dirname, '..');
@@ -66,7 +66,7 @@ function purgeMcpExomind(file: string): boolean {
 }
 
 export default async function install(
-  _client: ApiClient,
+  client: ApiClient,
   opts: { hook?: boolean; mcp?: boolean },
 ): Promise<void> {
   const claudeDir = path.join(os.homedir(), '.claude');
@@ -158,7 +158,27 @@ export default async function install(
     console.log(dim('  (stdio MCP 子进程读此配置，重启 Agent 后用新域名)'));
   }
 
+  // 5. 下一步：根据凭证状态显示不同内容（升级场景 vs 首次安装）
+  const live = loadConfig();
+  const keyHint = live.api_key ? `${live.api_key.slice(0, 8)}…${live.api_key.slice(-4)}` : '';
+  let me: { authenticated?: boolean; tenant_id?: string; login?: string } | null = null;
+  if (live.api_key) {
+    try {
+      me = (await client.get('/auth/me')) as { authenticated?: boolean; tenant_id?: string; login?: string };
+    } catch {
+      me = null; // key 无效 / 网络错 → 走"未能验证"分支
+    }
+  }
   console.log(yellow('\n下一步:'));
-  console.log(dim('  1. 若未配置凭证: exomind login'));
-  console.log(dim('  2. 重启 Claude Code → skill + hook + mcp__exomind__* 全部生效'));
+  if (me && me.authenticated) {
+    console.log(ok(`凭证有效：${live.base_url}（${keyHint}）`));
+    console.log(dim(`  身份：tenant ${me.tenant_id}${me.login ? ' · ' + me.login : ''}`));
+    console.log(dim('  升级完成 → 重启 Claude Code（skill/hook/MCP 启动时载入、不热重载）即生效'));
+  } else if (live.api_key) {
+    console.log(yellow(`已配置 API Key（${keyHint}），但未能验证（${live.base_url}）`));
+    console.log(dim('  运行 exomind whoami 核验；重启 Claude Code → mcp__exomind__* 生效'));
+  } else {
+    console.log(dim('  1. exomind login（粘贴 API Key）'));
+    console.log(dim('  2. 重启 Claude Code（加载 skill/hook/MCP）→ mcp__exomind__* 生效'));
+  }
 }
