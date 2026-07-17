@@ -245,10 +245,20 @@ export default async function install(
   const keyHint = live.api_key ? `${live.api_key.slice(0, 8)}…${live.api_key.slice(-4)}` : '';
   let me: { authenticated?: boolean; tenant_id?: string; login?: string } | null = null;
   if (live.api_key) {
-    try {
-      me = (await client.get('/auth/me')) as { authenticated?: boolean; tenant_id?: string; login?: string };
-    } catch {
-      me = null; // key 无效 / 网络错
+    // /auth/me 重试 3 次 + 短超时(6s):扛用户网络抖动(如 VPN 瞬时丢包)。
+    // 服务端 validate_api_key 也已加 ECS→auth 远程重试(第②段),两段都有重试。
+    for (let i = 0; i < 3; i++) {
+      try {
+        me = (await client.get('/auth/me', { timeoutMs: 6000 })) as {
+          authenticated?: boolean;
+          tenant_id?: string;
+          login?: string;
+        };
+        if (me && me.authenticated) break;
+      } catch {
+        me = null; // 网络错 / key 无效
+      }
+      if (i < 2) await new Promise((r) => setTimeout(r, 1000));
     }
   }
   const mcp = live.api_key ? await checkMcp() : { ok: false, detail: '未配置 API Key' };
