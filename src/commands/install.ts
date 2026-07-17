@@ -66,6 +66,35 @@ function purgeMcpExomind(file: string): boolean {
   return true;
 }
 
+/** 幂等注入 [mcp_servers.exomind] 到 ~/.codex/config.toml（Codex 用 TOML）。
+ *  追加式（非完整 TOML 重写），保留用户已有内容/注释；已存在该段则跳过。返回是否写入。 */
+export function configureCodexMcp(): boolean {
+  const codexConfig = path.join(os.homedir(), '.codex', 'config.toml');
+  try {
+    fs.mkdirSync(path.dirname(codexConfig), { recursive: true });
+  } catch {
+    /* 权限等 */
+  }
+  let existing = '';
+  try {
+    existing = fs.readFileSync(codexConfig, 'utf-8');
+  } catch {
+    existing = '';
+  }
+  // 幂等：已有 [mcp_servers.exomind] 段则跳过（不覆盖用户自定义）
+  if (/^\[mcp_servers\.exomind\]\s*$/m.test(existing)) {
+    return false;
+  }
+  backup(codexConfig);
+  const prefix = existing && !existing.endsWith('\n') ? '\n\n' : existing ? '\n' : '';
+  const snippet = `${prefix}[mcp_servers.exomind]
+command = "exomind"
+args = ["mcp"]
+`;
+  fs.writeFileSync(codexConfig, existing + snippet);
+  return true;
+}
+
 /** 自检：spawn `exomind mcp` 发 initialize，验证 MCP 服务端能启动并响应（抓"升级把 MCP 搞坏"）。 */
 function checkMcp(timeoutMs = 6000): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
@@ -178,6 +207,9 @@ export default async function install(
     oc.mcp = ocMcp;
     fs.writeFileSync(ocJson, JSON.stringify(oc, null, 2) + '\n');
 
+    // Codex: ~/.codex/config.toml → [mcp_servers.exomind]（TOML，幂等追加）
+    configureCodexMcp();
+
     // 清理会覆盖 stdio 的残留 exomind MCP 条目（settings.json mcpServers + 项目级 .mcp.json）
     // 否则项目级/用户级 SSE 等旧条目优先级更高，会盖住 stdio → MCP 401
     const purged: string[] = [];
@@ -193,6 +225,7 @@ export default async function install(
     console.log(ok('已配置 MCP server → exomind mcp'));
     console.log(dim('  → Claude Code: ~/.claude.json (mcpServers.exomind)'));
     console.log(dim('  → OpenCode: ~/.config/opencode/opencode.json (mcp.exomind)'));
+    console.log(dim('  → Codex: ~/.codex/config.toml ([mcp_servers.exomind])'));
     console.log(dim('  重启对应 Agent → 拿到 mcp__exomind__* 工具'));
   }
 
