@@ -60,7 +60,9 @@ exomind ingest --file ./notes.md -t "标题"
 ### Retrieve
 ```bash
 exomind query "如何做 X?"            # LLM 问答,引用 KB 页面
-exomind search "关键词" --limit 10   # 全文搜索; --rerank / --hybrid 更准
+exomind search "关键词"              # BM25 全文(精确关键词匹配)
+exomind search "关键词" --hybrid     # +向量语义:同义/跨语言/概念关联、字面搜不到时(如「层归一化」→Layer Normalization、「反向传播」→梯度下降)
+exomind search "关键词" --rerank     # +LLM 精排(最高准、慢;候选不多时)
 exomind entity "Redis"               # 实体详情 + 关系
 exomind relations "Redis" --depth 2  # 关联实体
 exomind stats                        # 知识库统计
@@ -69,6 +71,17 @@ exomind gaps                         # 知识缺口(驱动摄入)
 exomind daily                        # 每日摘要
 exomind synthesize "主题" --depth 2  # 主题综合报告
 ```
+
+### Draft (构思 → 草稿 → 发布)
+```bash
+exomind topics                              # 选题推荐(基于图谱密度)
+exomind draft new "选题" [--account <号>]    # 生成草稿 + 保存(LLM,1-3min;替代 gen_article.py)
+exomind draft list [--status <状态>]         # 草稿列表
+exomind draft show <id>                      # 看正文
+exomind draft publish <id>                   # 发布到知识库(入库,走 ingest)
+exomind draft wechat <id> --account <号>     # 投递公众号草稿箱(真发,返回 media_id;后台仍需群发)
+```
+链路:`topics` 选题 → `draft new` 生成 → `list/show` 审 → `publish` 入库 / `wechat` 发公众号。
 
 ### Review (FSRS-5)
 ```bash

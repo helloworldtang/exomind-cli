@@ -19,6 +19,7 @@ import stats from './commands/stats';
 import { list as reviewList, mark as reviewMark } from './commands/review';
 import synthesize from './commands/synthesize';
 import topics from './commands/topics';
+import draft from './commands/draft';
 import gaps from './commands/gaps';
 import feedback from './commands/feedback';
 import daily from './commands/daily';
@@ -171,6 +172,17 @@ program
   .description('选题推荐')
   .option('-c, --count <n>', '数量', '5')
   .action(run((client, opts: AnyOpts) => topics(client, { count: toInt(opts.count) })));
+
+program
+  .command('draft <action> [target...]')
+  .description('草稿: new <选题> / list / show <id> / publish <id> / wechat <id>')
+  .option('--account <name>', '目标公众号(new/wechat)')
+  .option('--status <s>', '状态过滤(list)')
+  .option('-p, --page <n>', '页码(list)', '1')
+  .option('-s, --size <n>', '每页(list)', '20')
+  .option('--digest <text>', '摘要(wechat,可选)')
+  .option('--author <name>', '笔名(wechat,可选)')
+  .action(run((client, opts: AnyOpts, args) => draft(client, opts, args)));
 
 program
   .command('gaps')
