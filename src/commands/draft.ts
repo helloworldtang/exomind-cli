@@ -21,7 +21,7 @@ export default async function draft(client: ApiClient, opts: DraftOpts, args: st
       return doWechat(client, opts, args[1]);
     default:
       throw new Error(
-        `未知 draft 子命令: ${action ?? '(空)'}。可用: new <选题> / list / show <id> / publish <id> / wechat <id>`,
+        `未知 draft 子命令: ${action ?? '(空)'}。可用: new <选题> 生成 / list 列表 / show <id> 看正文 / publish <id> 入库 / wechat <id> 投公众号`,
       );
   }
 }

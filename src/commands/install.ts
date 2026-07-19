@@ -271,7 +271,7 @@ export default async function install(
     console.log(
       me && me.authenticated
         ? ok(`  服务器连通 + 鉴权有效（tenant ${me.tenant_id} · ${keyHint}）`)
-        : yellow('  ✗ 服务器连通/鉴权异常 → exomind whoami 核验'),
+        : yellow('  ✗ 服务器连通/鉴权异常 → exomind me 核验'),
     );
     console.log(mcp.ok ? ok(`  MCP 服务端可用（${mcp.detail}）`) : yellow(`  ✗ MCP 服务端异常：${mcp.detail}`));
   }

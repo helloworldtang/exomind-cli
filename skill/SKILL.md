@@ -14,7 +14,7 @@ If a command fails with "未登录", run `exomind login` first.
 1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`。**用 `--dir` 时不要先 `Read` 文件**——CLI 自己读,预读纯浪费上下文。
 2. **Skill 工具只调用一次**(加载本文件一次即可,后续一律用 Bash 跑 `exomind ...`)。
 3. 单条知识 → `exomind ingest "内容" -t 标题 --tag 标签`。
-4. ingest 是**同步**(每文件 1-3 min);`--dir` 串行 + `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
+4. ingest 是**同步**(每文件 1-3 min);`--dir` 并发(`--concurrency` 默认3)+ `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
 5. **"全部跳过"= 成功**(文件已在库且内容未变),**绝不**因此擅自加 `--force` 重摄(会白白重跑 N×分钟 LLM)。只有用户**明确**说"强制刷新/全量重处理/忽略缓存"才用 `--force`。
 6. **绝不把多个文件 `cat`/合并成一条 `ingest`**(丢失每篇结构、无法按文件判重、易超 5 万字限)。多个文件就是 `--dir`;单条才是文本 ingest。
 
@@ -40,15 +40,23 @@ If a command fails with "未登录", run `exomind login` first.
 
 ```bash
 exomind ingest --dir ~/workspace/notes --recursive        # 增量:只摄新增/改动
+exomind ingest --dir ~/workspace/notes --concurrency 5    # 并发(默认3,大服务器可调高加速)
 exomind ingest --dir ~/workspace/notes --force            # 强制全量重摄
 exomind ingest --dir ~/workspace/notes --pattern "*.md"   # 默认就是 *.md
 ```
 
 - **增量去重**:按文件内容 SHA-256 记在 `~/.exomind/manifest.json`,**未变的文件直接跳过**(不调 LLM),所以隔几天重跑同目录很便宜——只处理新/改文件。
-- **串行 + 进度**:弱服务器上每文件 1-3 分钟,`--dir` 串行处理、stderr 打 `⏳ [i/n]`;ingest 是**同步**(不是后台异步),会一直占住到完成。
+- **并发 + 进度**:每文件 1-3 分钟,`--dir` 按 `--concurrency`(默认3)并发处理、stderr 打 `⏳ [i/n]`;ingest 是**同步**(不是后台异步),会一直占住到完成。
 - 结束汇总:`新增 N / 更新 M / 跳过 K / 失败 J`。
 
 ## Commands
+
+### Login & status
+```bash
+exomind login                 # 配置服务器 + 粘贴 API Key(交互式)
+exomind me                    # 显示当前登录态/服务器/凭证
+exomind whoami                # 同上
+```
 
 ### Save knowledge
 ```bash

@@ -25,6 +25,7 @@ exomind install --with-hook   # 装 Claude Code skill + UserPromptSubmit hook
 | 命令 | 说明 |
 |------|------|
 | `exomind login [--base-url <url>] [--api-key <key>]` | 配置服务器地址与凭证;不传 `--api-key` 则交互输入 |
+| `exomind me` | 显示当前登录态与服务器 |
 | `exomind whoami` | 显示当前登录态与服务器 |
 
 凭证也支持环境变量 `EXOMIND_API_KEY` / `EXOMIND_BASE_URL`(便于 CI)。

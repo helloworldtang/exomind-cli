@@ -14,7 +14,7 @@
 ```bash
 npm install -g exomind
 exomind login               # 粘贴 youhuale.cn/ui/account 的 API Key
-exomind whoami              # 验证登录
+exomind me                  # 验证登录
 ```
 
 > 前置:Node.js 18+(`node -v`)。CI 等场景可改用环境变量 `EXOMIND_API_KEY` / `EXOMIND_BASE_URL`,免登录。
@@ -50,7 +50,7 @@ exomind feedback "entities/Redis.md" positive
 - **凭证类型**:服务端 `auth_middleware` 同时接受 **API Key**(从 `youhuale.cn/ui/account` 复制)与 **GitHub token**(`gh_` 前缀);两者统一以 `Authorization: Bearer` 发送,CLI 不关心是哪种。
 - **读取优先级**:`config.json` 的 `api_key` → 环境变量 `EXOMIND_API_KEY` → 旧版遗留文件 `~/.claude/scripts/.exomind-api-key`(向后兼容老安装)。三者任一存在即免登录。
 - **CI / 免登录**:只设环境变量 `EXOMIND_API_KEY`(可选 `EXOMIND_BASE_URL`)即可,完全不写本地文件。`config.json` 优先级高于环境变量,故已 `login` 的机器需 `--api-key` 才能临时覆盖。
-- **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `exomind whoami` 复核。
+- **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `exomind me` 复核。
 - **换号 / 登出**:重新 `exomind login` 覆盖旧凭证;彻底登出删 `~/.exomind/config.json`。
 - **安全提醒**:文件是**明文**,任何能读你 home 目录的进程都能拿到 key。共享机器 / 不信任环境请用环境变量,不要用 `login`。
 
@@ -91,7 +91,7 @@ exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
 
 | 命令 | 说明 |
 |------|------|
-| `login` / `whoami` | 配置与查看登录态 |
+| `login` / `me` | 配置与查看登录态 |
 | `ingest` | 导入知识(文本 / stdin / `--file`) |
 | `query` | LLM 问答 |
 | `search` | 全文 / `--hybrid` / `--rerank` 搜索 |

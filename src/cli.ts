@@ -93,8 +93,13 @@ program
   .action(run(login));
 
 program
-  .command('whoami')
+  .command('me')
   .description('显示当前登录态与服务器')
+  .action(run(whoami));
+// 向后兼容:旧名 whoami 保留为隐藏别名(不在 help 显示,旧脚本不破)
+program
+  .command('whoami', { hidden: true })
+  .description('显示当前登录态与服务器(me 的旧名)')
   .action(run(whoami));
 
 // ── 写入 ──
@@ -175,7 +180,7 @@ program
 
 program
   .command('draft <action> [target...]')
-  .description('草稿: new <选题> / list / show <id> / publish <id> / wechat <id>')
+  .description('草稿: new <选题> 生成 / list 列表 / show <id> 看正文 / publish <id> 入库 / wechat <id> 投公众号')
   .option('--account <name>', '目标公众号(new/wechat)')
   .option('--status <s>', '状态过滤(list)')
   .option('-p, --page <n>', '页码(list)', '1')

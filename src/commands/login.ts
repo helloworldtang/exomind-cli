@@ -37,11 +37,11 @@ export default async function login(
     if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
       throw new Error(`凭证校验失败 (HTTP ${e.status}): ${e.detail}`); // 不落盘
     }
-    // 网络错误无法判定凭证有效性,不阻塞:先落盘,稍后用 exomind whoami 验证
+    // 网络错误无法判定凭证有效性,不阻塞:先落盘,稍后用 exomind me 验证
     verified = false;
     console.log(
       yellow(
-        `警告: 无法连接 ${baseUrl} 校验凭证 (${e instanceof Error ? e.message : String(e)})。配置仍将保存,稍后可用 exomind whoami 验证。`,
+        `警告: 无法连接 ${baseUrl} 校验凭证 (${e instanceof Error ? e.message : String(e)})。配置仍将保存,稍后可用 exomind me 验证。`,
       ),
     );
   }
