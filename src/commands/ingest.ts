@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { opTimeout, type ApiClient } from '../api';
 import { output, ok, green, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
-import { runDirIngestest } from '../ingest_dir';
+import { runDirIngestest, ingestWithRetry } from '../ingest_dir';
 import { loadManifest, saveManifest, recordFile } from '../manifest';
 
 export default async function ingest(
@@ -50,7 +50,7 @@ export default async function ingest(
   if (opts.tag && opts.tag.length) body.tags = opts.tag;
 
   hint('⏳ 摄入中: 服务器用 LLM 抽取实体/关系,长内容可能 1-3 分钟…');
-  const result = await client.post('/ingest', body, { timeoutMs: opTimeout(300000) });
+  const result = await ingestWithRetry(client, body, opTimeout(300000));
 
   // --file 摄入记录 manifest(与 --dir 共用同一份,保证跨模式判重:--file 摄过的文件,--dir 会跳过)
   if (fileAbs && fileRaw !== null) {
