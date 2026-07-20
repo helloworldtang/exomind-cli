@@ -26,6 +26,7 @@ import daily from './commands/daily';
 import login from './commands/login';
 import whoami from './commands/whoami';
 import installCmd from './commands/install';
+import doctor from './commands/doctor';
 
 const VERSION = pkg.version;
 
@@ -244,10 +245,17 @@ program
 // ── 安装 skill + hook ──
 program
   .command('install')
-  .description('安装 skill + hook + MCP(默认全装;--no-hook / --no-mcp 关闭某项)')
-  .option('--no-hook', '不写 UserPromptSubmit hook')
-  .option('--no-mcp', '不写 MCP server 配置(Claude Code + OpenCode 都不写)')
+  .description('安装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主);默认全装,--host 选单宿主')
+  .option('--host <h>', '只装某个宿主: claude | codex | opencode(缺省全装)')
+  .option('--no-skill', '不刷新 skill(不删已有)')
+  .option('--no-hook', '不写 UserPromptSubmit hook(仅 Claude)')
+  .option('--no-mcp', '不写 MCP server 配置')
   .action(run(installCmd));
+
+program
+  .command('doctor')
+  .description('诊断各宿主 skill/hook/MCP/鉴权 状态(install 后排查)')
+  .action(run(doctor));
 
 async function main(): Promise<void> {
   // 版本标志(第一个参数):-v / --version → 直接出版本(与 exomind 小写短选项风格一致)。

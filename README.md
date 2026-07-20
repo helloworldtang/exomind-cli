@@ -56,12 +56,17 @@ exomind feedback "entities/Redis.md" positive
 
 > 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `exomind login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `exomind login` 的 prompt 读取不走 shell 历史。
 
-## 接入 Claude Code(一条命令,默认全装)
+## 接入 Claude Code / Codex(一条命令,默认全装)
 
 ```bash
-exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
-# 不想要某项: exomind install --no-hook  或  --no-mcp
+exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),全部自动(幂等+备份)
+# 只装某个宿主: exomind install --host codex   (claude | codex | opencode)
+# 跳过某项: --no-skill / --no-hook / --no-mcp
 ```
+
+**Codex**(skill + MCP,无 hook):装到 `$CODEX_HOME/skills/exomind/`(缺省 `~/.codex/`),MCP 写入 `$CODEX_HOME/config.toml`。**Codex 没有 Claude 的 UserPromptSubmit hook**,靠 skill 的触发词(jdit/存档/查询)驱动;MCP `ingest` 只收文本,目录导入走 `exomind ingest --dir`。装完**重启 Codex**,skill 列表应出现 `exomind`。
+
+排查各宿主装没装上:`exomind doctor`(或 `exomind --json doctor`)。
 
 一行完成三层,免手改任何 JSON:
 - **① MCP 工具**(能力):写 `~/.claude.json` 的 `mcpServers.exomind` → Agent 拿到 `mcp__exomind__*` 确定性工具。
@@ -77,13 +82,14 @@ exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
 
 **升级**:`npm i -g exomind@latest && exomind install`(幂等,刷新 skill/hook/mcp;`~/.exomind/` 的 config 与 manifest 保留)。注意:`npm i -g` 只换二进制(CLI+MCP 自动用新),**skill 是拷贝的,需 `exomind install` 才刷新**。
 
-## 关于 MCP 工具层(Claude Code + OpenCode 都已默认装)
+## 关于 MCP 工具层(Claude Code / OpenCode / Codex 都已默认装)
 
-`exomind install` 一次写**两个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
+`exomind install` 一次写**三个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
 - **Claude Code**:`~/.claude.json` → `mcpServers.exomind`
 - **OpenCode**:`~/.config/opencode/opencode.json` → `mcp.exomind`
+- **Codex**:`$CODEX_HOME/config.toml` → `[mcp_servers.exomind]`
 
-只关 MCP:`exomind install --no-mcp`(两个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
+只关 MCP:`exomind install --no-mcp`(三个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
 
 `exomind mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
 
@@ -100,7 +106,9 @@ exomind install          # 装 skill + hook + MCP,全部自动(幂等+备份)
 | `review` / `review mark` | FSRS-5 复习队列与评分 |
 | `synthesize` / `topics` / `gaps` / `daily` | 主题综合、选题、缺口、每日摘要 |
 | `feedback` | 质量反馈(影响搜索排名) |
-| `hook` / `install` | UserPromptSubmit 钩子、安装 skill+hook |
+| `install` | 装 skill(Claude+Codex)+ hook(Claude)+ MCP;`--host`/`--no-skill`/`--no-hook`/`--no-mcp` |
+| `doctor` | 诊断各宿主 skill/hook/MCP/鉴权 状态(`--json`) |
+| `hook` | UserPromptSubmit 钩子(由 install 配置) |
 
 完整命令参考与排错见 **[CLI 命令指南](./docs/cli-guide.md)**。
 
@@ -143,7 +151,8 @@ src/
   io.ts         stdin / 文件读取
   hook.ts       UserPromptSubmit 钩子(替代 bash hook)
   commands/     每个命令一个文件
-skill/SKILL.md  Claude Code skill 源(install 时拷贝)
+skill/claude/SKILL.md  Claude Code skill 源(install 时拷贝)
+skill/codex/SKILL.md   Codex skill 源(install 时拷到 $CODEX_HOME/skills/exomind/)
 test/           node:test 单元 + 协议级 e2e
 ```
 
