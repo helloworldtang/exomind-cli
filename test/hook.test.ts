@@ -9,6 +9,10 @@ describe('hook: isSecretWord', () => {
     assert.equal(isSecretWord('JDIT'), true);
     assert.equal(isSecretWord('存档!'), true);
     assert.equal(isSecretWord(' 存档 '), true);
+    // 英文逗号/分号/句号尾随也要触发(正则曾缺这些 → 暗号失效)
+    assert.equal(isSecretWord('jdit,'), true);
+    assert.equal(isSecretWord('存档;'), true);
+    assert.equal(isSecretWord('jdit.'), true);
   });
   test('非暗号', () => {
     assert.equal(isSecretWord('继续'), false);

@@ -111,7 +111,8 @@ export function hasTechTerm(msg: string): boolean {
 
 export function isSecretWord(msg: string): boolean {
   const m = msg.trim();
-  return /^(存档|jdit)[\s!!.。?？、]*$/i.test(m);
+  // 容忍尾随标点/空格(中英文逗号、句号、问号、感叹、顿号、分号等),避免 "jdit," / "存档;" 不触发
+  return /^(存档|jdit)[\s!.,;:!?。？、~…]*$/i.test(m);
 }
 
 export function matchesExperience(msg: string): boolean {
@@ -264,9 +265,17 @@ export async function runHook(client: ApiClient): Promise<void> {
   }
 
   // 3. 存档/jdit 暗号(冷却)
-  if (isSecret && msg.length < 20 && now - dedup.lastArchive > COOLDOWN_MS) {
-    outputs.push(ARCHIVE_INSTRUCTION);
-    dedup.lastArchive = now;
+  if (isSecret && msg.length < 20) {
+    if (now - dedup.lastArchive > COOLDOWN_MS) {
+      outputs.push(ARCHIVE_INSTRUCTION);
+      dedup.lastArchive = now;
+    } else {
+      // 冷却中给反馈(避免用户以为没触发);如需立即存档可手动 exomind ingest
+      const remain = Math.ceil((COOLDOWN_MS - (now - dedup.lastArchive)) / 1000);
+      outputs.push(
+        `[ExoMind] 存档冷却中,${remain} 秒后可再次触发(30 分钟防重复摄入)。暗号已识别。如需立即存档,直接运行 \`exomind ingest\`。`,
+      );
+    }
   } else if (!isSecret) {
     // 4. 经验 / 5. 调研
     if (matchesExperience(msg)) outputs.push(EXPERIENCE_INSTRUCTION);
