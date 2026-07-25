@@ -208,7 +208,7 @@ function contextBlock(ents: EntityDesc[]): string {
     out += '\n';
   }
   out +=
-    '以上知识已在上下文中,回答时可参考。如需更多详情,运行 `exomind query "<问题>"` 或 `exomind entity <名称>`。';
+    '以上 ' + ents.length + ' 条来自你的知识库(已注入上下文)。**鼓励主动反查让飞轮转起来**:遇问题先 `exomind query "<问题>"`(不只"存",更要"用"——反查是飞轮增强回路的关键),再回答。';
   return out;
 }
 
