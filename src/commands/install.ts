@@ -168,8 +168,12 @@ export function checkMcp(timeoutMs = 6000): Promise<{ ok: boolean; detail: strin
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      // shell: 仅 Windows 需(找 .cmd/.exe);Linux/macOS 直接 exec,避免 Node22 DEP0190 警告
-      child = spawn('exomind', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32' });
+      // Windows 需 shell 解析 .cmd/.exe;但 args 数组 + shell:true 会触发 Node22 DEP0190 警告,
+      // 故 Windows 把命令拼成单字符串(无 args 数组即可绕过),Linux/macOS 直接 exec(无 shell)。
+      const _isWin = process.platform === 'win32';
+      child = _isWin
+        ? spawn('exomind mcp', { stdio: ['pipe', 'pipe', 'pipe'], shell: true })
+        : spawn('exomind', ['mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
       resolve({ ok: false, detail: `无法启动: ${e instanceof Error ? e.message : e}` });
       return;
