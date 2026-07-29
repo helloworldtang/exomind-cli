@@ -188,6 +188,7 @@ program
   .option('-s, --size <n>', '每页(list)', '20')
   .option('--digest <text>', '摘要(wechat,可选)')
   .option('--author <name>', '笔名(wechat,可选)')
+  .option('--cover <mode>', '封面(wechat): config=号配置默认 / default=服务端默认封面', 'config')
   .action(run((client, opts: AnyOpts, args) => draft(client, opts, args)));
 
 program
