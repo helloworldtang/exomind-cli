@@ -125,7 +125,13 @@ async function doWechat(client: ApiClient, opts: DraftOpts, id: string | undefin
   if (!opts.account) throw new Error('请提供 --account: exomind draft wechat <id> --account <公众号>');
   const r: Record<string, any> = await client.post(
     `/drafts/${encodeURIComponent(id)}/submit-wechat`,
-    { account: opts.account, digest: opts.digest, author: opts.author, cover: opts.cover },
+    {
+      account: opts.account,
+      digest: opts.digest,
+      author: opts.author,
+      cover: opts.cover,
+      ...(opts.coverPrompt ? { cover_image_prompt: opts.coverPrompt } : {}),
+    },
     { timeoutMs: opTimeout(120000) },
   );
   output(r, () => {

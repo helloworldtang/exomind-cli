@@ -188,7 +188,8 @@ program
   .option('-s, --size <n>', '每页(list)', '20')
   .option('--digest <text>', '摘要(wechat,可选)')
   .option('--author <name>', '笔名(wechat,可选)')
-  .option('--cover <mode>', '封面(wechat): config=号配置默认 / default=服务端默认封面', 'config')
+  .option('--cover <mode>', '封面策略(wechat): ai=AI后台出图(默认) / auto=服务端兜底 / provided=用号配置封面 / none', 'ai')
+  .option('--cover-prompt <text>', 'AI封面画面提示(cover=ai可选,直传yyps;不填则读全文提炼)')
   .action(run((client, opts: AnyOpts, args) => draft(client, opts, args)));
 
 program
