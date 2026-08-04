@@ -147,4 +147,60 @@ describe('ingest_dir', () => {
     assert.ok(maxInFlight >= 2, `确实并发(峰值 ${maxInFlight})`);
     assert.deepEqual([...processed].sort((a, b) => a - b), items, '无遗漏无重复');
   });
+
+  test('ingestWithRetry: url 参数路由到 /ingest/async', async () => {
+    let postedUrl = '';
+    const fakeClient = {
+      post: async (url: string) => { postedUrl = url; return { job_id: 7, status: 'pending' }; },
+    };
+    await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000, '/ingest/async');
+    assert.equal(postedUrl, '/ingest/async');
+  });
+
+  test('ingestWithRetry: 504 瞬时错误退避后成功', async () => {
+    let calls = 0;
+    const fakeClient = {
+      post: async () => {
+        calls++;
+        if (calls < 3) throw new ApiError(504, 'Gateway Timeout');
+        return { entities: 2 };
+      },
+    };
+    const r = await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
+    assert.equal(r.entities, 2);
+    assert.equal(calls, 3);
+  });
+
+  test('ingestWithRetry: 504 重试 3 次仍失败 → 抛', async () => {
+    const fakeClient = { post: async () => { throw new ApiError(504, 'Gateway Timeout'); } };
+    await assert.rejects(
+      () => id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000),
+      (e: unknown) => e instanceof ApiError && (e as ApiError).status === 504,
+    );
+  });
+
+  test('retryTransient: 503 退避后成功;4xx 不重试', async () => {
+    let calls = 0;
+    const ok = async () => {
+      calls++;
+      if (calls < 2) throw new ApiError(503, 'unavailable');
+      return 'done';
+    };
+    assert.equal(await id.retryTransient(ok), 'done');
+    assert.equal(calls, 2);
+
+    const bad = async () => { throw new ApiError(404, 'not found'); };
+    await assert.rejects(
+      () => id.retryTransient(bad),
+      (e: unknown) => e instanceof ApiError && (e as ApiError).status === 404,
+    );
+  });
+
+  test('friendlyMsg: 502/503/504/网络 → 友好文案,不吐裸 HTML', () => {
+    assert.equal(id.friendlyMsg(new ApiError(504, '<html>504</html>')), '服务器处理超时');
+    assert.equal(id.friendlyMsg(new ApiError(502, 'x')), '网关异常');
+    assert.equal(id.friendlyMsg(new ApiError(503, 'x')), '服务暂不可用');
+    assert.equal(id.friendlyMsg(new ApiError(0, 'x')), '网络错误');
+    assert.match(id.friendlyMsg(new Error('其它错')), /其它错/);
+  });
 });
