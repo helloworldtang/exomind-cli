@@ -114,6 +114,7 @@ When the session produces any of the following, **immediately run `exomind inges
 - **Root-cause / debugging insights** — 根因分析, 调试经验
 - **Performance results with concrete numbers** — 优化效果, 性能数据, 对比数据
 - **Best practices / patterns** — 最佳实践, 设计模式
+- **Reusable knowledge — concepts, methodology, mental models, classic practices, reusable solutions, distilled experience** — 可复用的方案、概念、方法论、认知、经验、经典实践
 
 Rules for ingesting:
 - Use a **descriptive title** (`-t`), not a generic one like "经验总结".
