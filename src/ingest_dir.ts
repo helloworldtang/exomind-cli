@@ -125,7 +125,7 @@ export function friendlyMsg(e: Error): string {
 }
 
 /** 提交 + 限流/瞬时错误重试(POST /ingest 或 /ingest/async):
- *  - 429 rate_limit:Retry-After 秒级退避,最多 5 次。
+ *  - 429 rate_limit 与无 type 的 429(中间件频率窗/nginx 限流):Retry-After 秒级退避(上限 60s),最多 5 次。
  *  - 429 daily_quota:挂起到次日 0 点续跑,最多 3 个自然日。
  *  - 502/503/504/网络:指数退避(1s/2s/4s),最多 3 次。
  *  - 其它:原样抛出。 */
@@ -150,10 +150,12 @@ export async function ingestWithRetry(
           await suspendUntilMidnight(Number(e.body?.reset ?? 0));
           continue;
         }
-        if (type === 'rate_limit') {
-          if (++rateAttempts >= 5) throw new ApiError(429, '并发限流,重试 5 次仍失败');
-          const retry = Number(e.headers['retry-after'] ?? e.body?.retry_after ?? 5);
-          process.stderr.write(dim(`  ⏸ 并发限流,${retry}s 后重试\n`));
+        // rate_limit(并发闸/频率窗)与无 type 的 429(如 nginx 限流)一律退避重试,等待上限 60s
+        if (type === 'rate_limit' || type === undefined) {
+          if (++rateAttempts >= 5) throw new ApiError(429, '限流,重试 5 次仍失败');
+          const retry = Math.min(Number(e.headers['retry-after'] ?? e.body?.retry_after ?? 5), 60);
+          const label = type === undefined ? '请求频率超限' : '并发限流';
+          process.stderr.write(dim(`  ⏸ ${label},${retry}s 后重试\n`));
           await sleep(retry * 1000);
           continue;
         }

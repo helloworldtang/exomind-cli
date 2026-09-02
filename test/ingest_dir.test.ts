@@ -106,6 +106,20 @@ describe('ingest_dir', () => {
     assert.equal(calls, 2);
   });
 
+  test('ingestWithRetry: 无 type 的 429(中间件频率窗/nginx)也退避重试', async () => {
+    let calls = 0;
+    const fakeClient = {
+      post: async () => {
+        calls++;
+        if (calls === 1) throw new ApiError(429, '请求过于频繁，请稍后再试', { 'retry-after': '0' });
+        return { entities: 3 };
+      },
+    };
+    const r = await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
+    assert.equal(r.entities, 3);
+    assert.equal(calls, 2);
+  });
+
   test('ingestWithRetry: 非 429 错误直接抛(不计重试)', async () => {
     const fakeClient = { post: async () => { throw new ApiError(500, 'LLM 截断'); } };
     await assert.rejects(
