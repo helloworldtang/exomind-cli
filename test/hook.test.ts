@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm } from '../src/hook';
+import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm, buildDiscoverInjection } from '../src/hook';
 
 describe('hook: isSecretWord', () => {
   test('匹配存档/jdit 及尾部标点', () => {
@@ -73,5 +73,23 @@ describe('hook: hasTechTerm', () => {
     assert.equal(hasTechTerm('用了 `useState`'), true);
     assert.equal(hasTechTerm('文件 config.yaml'), true);
     assert.equal(hasTechTerm('myComponent'), true);
+  });
+});
+
+describe('hook: buildDiscoverInjection(今日发现注入)', () => {
+  test('四类卡取第一张,带 reason 与总数', () => {
+    const out = buildDiscoverInjection([
+      { type: 'recap', name: 'AOF 重写', reason: '你昨天问过「Redis 持久化」' },
+      { type: 'stub', name: '悬空概念', reason: '被 5 个页面引用' },
+    ]);
+    assert.ok(out.includes('[ExoMind 今日发现·找回]'));
+    assert.ok(out.includes('你昨天问过「Redis 持久化」'));
+    assert.ok(out.includes('今日共 2 张卡'));
+    assert.ok(out.includes('exomind entity "AOF 重写"'));
+  });
+
+  test('未知 type 显示原文;空卡组返回空串', () => {
+    assert.equal(buildDiscoverInjection([{ type: 'x', name: 'N', reason: 'r' }]).includes('·x'), true);
+    assert.equal(buildDiscoverInjection([]), '');
   });
 });

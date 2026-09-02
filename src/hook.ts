@@ -84,6 +84,55 @@ function dedupPath(): string {
   return path.join(CACHE_DIR, `dedup-${sessionKey()}.json`);
 }
 
+// ── 今日发现注入(每天首条有效 prompt 一次) ──
+const DISCOVER_STATE = path.join(CACHE_DIR, 'discover-state.json');
+const DISCOVER_FAIL_COOLDOWN_MS = 30 * 60 * 1000;
+
+export function buildDiscoverInjection(cards: any[]): string {
+  if (!cards || !cards.length) return '';
+  const labels: Record<string, string> = { recap: '找回', bridge: '新连接', stub: '待补全', theme: '本周主线' };
+  const c = cards[0];
+  return (
+    `[ExoMind 今日发现·${labels[c.type] || c.type}] ${c.reason}\n` +
+    `今日共 ${cards.length} 张卡:运行 \`exomind entity "${c.name}"\` 查看第一条,` +
+    '或打开 youhuale.cn/ui/discover 逐张处理。与当前话题无关则忽略。'
+  );
+}
+
+function readDiscoverState(): { date?: string; done?: boolean; failed?: number } {
+  try {
+    return JSON.parse(fs.readFileSync(DISCOVER_STATE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveDiscoverState(st: object): void {
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(DISCOVER_STATE, JSON.stringify(st));
+  } catch {
+    /* 状态写入失败不阻塞(次日重试) */
+  }
+}
+
+export async function dailyDiscoverInjection(client: ApiClient): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const st = readDiscoverState();
+  if (st.date === today && st.done) return '';
+  if (st.date === today && st.failed && Date.now() - st.failed < DISCOVER_FAIL_COOLDOWN_MS) {
+    return '';
+  }
+  try {
+    const data = await client.get('/daily-discovery', undefined, { timeoutMs: 8000 });
+    saveDiscoverState({ date: today, done: true, ts: Date.now() });
+    return buildDiscoverInjection(data.discoveries || []);
+  } catch {
+    saveDiscoverState({ date: today, failed: Date.now() }); // 失败冷却 30 分钟再试
+    return '';
+  }
+}
+
 function safe(s: string): string {
   return s.replace(/[^a-zA-Z0-9一-龥._-]/g, '_').slice(0, 64);
 }
@@ -286,6 +335,14 @@ export async function runHook(client: ApiClient): Promise<void> {
   try {
     const ctx = await buildContext(client, msg, dedup, now);
     if (ctx) outputs.push(ctx);
+  } catch {
+    /* 注入失败不影响主流程 */
+  }
+
+  // 7. 今日发现注入(每天首条有效 prompt 一次,失败 30 分钟冷却)
+  try {
+    const discover = await dailyDiscoverInjection(client);
+    if (discover) outputs.push(discover);
   } catch {
     /* 注入失败不影响主流程 */
   }
