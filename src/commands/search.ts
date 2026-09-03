@@ -1,5 +1,6 @@
 /** exomind search <keyword> — 全文/混合/精排搜索。 */
 import type { ApiClient } from '../api';
+import { retryWith429 } from '../ingest_dir';
 import { output, cyan, dim, yellow, truncate } from '../format';
 
 export default async function search(
@@ -10,12 +11,12 @@ export default async function search(
   const keyword = args.join(' ').trim();
   if (!keyword) throw new Error('请提供关键词: exomind search "关键词"');
 
-  const result = await client.get('/search', {
+  const result = await retryWith429(() => client.get('/search', {
     q: keyword,
     limit: opts.limit ?? 10,
     rerank: opts.rerank ?? false,
     hybrid: opts.hybrid ?? false,
-  });
+  }));
 
   const results = result.results || [];
   output(result, () => {

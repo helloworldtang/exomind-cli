@@ -9,6 +9,7 @@ import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
 import { runHook } from './hook';
 import { runMcpServer } from './mcp';
+import { maybeNotifyUpdate } from './update-check';
 
 import ingest from './commands/ingest';
 import query from './commands/query';
@@ -69,6 +70,7 @@ function run<T = AnyOpts>(fn: (client: ApiClient, opts: T, args: string[]) => Pr
     const client = new ApiClient(cfg);
     try {
       await fn(client, command.opts() as T, command.args);
+      if (!root.json) await maybeNotifyUpdate(VERSION); // json 模式不打扰机器输出
     } catch (e) {
       handleError(e);
     }

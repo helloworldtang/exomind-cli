@@ -218,3 +218,37 @@ describe('ingest_dir', () => {
     assert.match(id.friendlyMsg(new Error('其它错')), /其它错/);
   });
 });
+
+describe('retryWith429(限流退避,风暴根治)', () => {
+  test('429 按 Retry-After 退避后重试成功', async () => {
+    let calls = 0;
+    const fake = { fn: async () => { if (++calls === 1) throw new ApiError(429, '限流', { 'retry-after': '0' }); return { ok: 1 }; } };
+    const r = await id.retryWith429(fake.fn);
+    assert.equal(r.ok, 1);
+    assert.equal(calls, 2);
+  });
+
+  test('非 429 错误直接抛(不计重试)', async () => {
+    let calls = 0;
+    const fake = { fn: async () => { calls++; throw new ApiError(500, '服务器错误'); } };
+    await assert.rejects(() => id.retryWith429(fake.fn));
+    assert.equal(calls, 1);
+  });
+
+  test('429 连续 3 次仍失败 → 抛出', async () => {
+    let calls = 0;
+    const fake = { fn: async () => { calls++; throw new ApiError(429, '限流', { 'retry-after': '0' }); } };
+    await assert.rejects(
+      () => id.retryWith429(fake.fn),
+      (e: unknown) => e instanceof ApiError && e.status === 429,
+    );
+    assert.equal(calls, 3);
+  });
+
+  test('无 Retry-After 头用默认 5s,非法值兜底', async () => {
+    let calls = 0;
+    const fake = { fn: async () => { if (++calls === 1) throw new ApiError(429, '限流'); return 2; } };
+    const r = await id.retryWith429(fake.fn);
+    assert.equal(r, 2);
+  });
+});

@@ -174,6 +174,24 @@ export async function ingestWithRetry(
   }
 }
 
+/** 429 限流退避重试(Retry-After 秒级,上限 60s,默认 3 次)。
+ *  与 retryTransient(502/503/504/网络)互补:限流是"稍等再来"不是瞬时故障。
+ *  曾经 poll/query/search 撞 429 直接抛,--dir 轮询循环吞错后 2s 一轮
+ *  42 并发 ≈760/min 自锁成风暴(2026-09-02 线上事故),此函数即根治。 */
+export async function retryWith429<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 429 || attempt >= maxAttempts) throw e;
+      const raw = Number(e.headers['retry-after'] ?? e.body?.retry_after ?? 5);
+      const wait = Math.min(Number.isFinite(raw) && raw > 0 ? raw : 5, 60);
+      process.stderr.write(dim(`  ⏸ 请求频率超限,${wait}s 后重试 (${attempt}/${maxAttempts})\n`));
+      await sleep(wait * 1000);
+    }
+  }
+}
+
 /** 瞬时错误(502/503/504/网络)指数退避重试,GET 轮询用。其它错误立即抛出。 */
 export async function retryTransient<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   let lastErr: unknown;
@@ -287,7 +305,7 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
       await Promise.all(
         [...inFlight.entries()].map(async ([jobId, f]) => {
           try {
-            const s = await retryTransient(() => client.get('/ingest/status', { job_id: jobId }));
+            const s = await retryWith429(() => client.get('/ingest/status', { job_id: jobId }));
             if (s.status !== 'done' && s.status !== 'failed') return;
             inFlight.delete(jobId);
             done++;
