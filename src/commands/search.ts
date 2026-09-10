@@ -29,7 +29,10 @@ export default async function search(
       const title = String(r.title ?? r.path ?? '');
       console.log(`\n  ${i + 1}. ${cyan(title)}`);
       if (r.path) console.log(dim(`     ${r.path}`));
-      if (r.snippet) console.log(dim(`     ${truncate(String(r.snippet), 100)}`));
+      // 服务端 GET /search 给的是 `content`（正文前 200 字），**没有 `snippet`**。
+      // 旧代码只读 r.snippet → 这一行永远不打印（静默少一行，不报错、不 404）。
+      const snip = r.snippet ?? r.content;
+      if (snip) console.log(dim(`     ${truncate(String(snip), 100)}`));
       if (r.score != null) console.log(dim(`     score: ${r.score}`));
     });
   });
