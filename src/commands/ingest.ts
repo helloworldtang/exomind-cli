@@ -6,13 +6,26 @@ import { readStdin, readStdinForced, readFileText } from '../io';
 import { runDirIngestest, ingestWithRetry } from '../ingest_dir';
 import { loadManifest, saveManifest, recordFile } from '../manifest';
 
+/** 解析 --dir 的目录路径。容忍两种写法:
+ *  - `ingest --dir <目录>`(文档写法,commander 直接给 string)
+ *  - `ingest <目录> --dir`(landing 页写法,--dir 无值时 commander 给 true,目录在位置参数里)
+ *  landing 页的示例曾按前者报 `argument missing`(第 8.5 节事故),这是服务端护栏
+ *  与 CLI 双向修好的 CLI 侧半边;服务端护栏 test_landing_cli_examples_are_well_formed 仍在。 */
+export function resolveIngestDir(dir: string | boolean | undefined, args: string[]): string {
+  const dirPath = typeof dir === 'string' ? dir : args[0];
+  if (!dirPath || dirPath === '-') {
+    throw new Error('--dir 需要目录路径。两种写法: exomind ingest --dir <目录> 或 exomind ingest <目录> --dir');
+  }
+  return dirPath;
+}
+
 export default async function ingest(
   client: ApiClient,
   opts: {
     title?: string;
     tag?: string[];
     file?: string;
-    dir?: string;
+    dir?: string | boolean;
     recursive?: boolean;
     pattern?: string;
     force?: boolean;
@@ -20,7 +33,7 @@ export default async function ingest(
   },
   args: string[],
 ): Promise<void> {
-  if (opts.dir) return runDirIngestest(client, opts, opts.dir);
+  if (opts.dir) return runDirIngestest(client, opts, resolveIngestDir(opts.dir, args));
 
   let content = '';
   let fileAbs: string | null = null;
