@@ -27,6 +27,7 @@ import daily from './commands/daily';
 import login from './commands/login';
 import whoami from './commands/whoami';
 import deletePage from './commands/delete';
+import getPage from './commands/get';
 import trash from './commands/trash';
 import installCmd from './commands/install';
 import doctor from './commands/doctor';
@@ -127,6 +128,11 @@ program
   .action(run(ingest));
 
 // ── 删除 / 回收站 ──
+program
+  .command('get <page...>')
+  .description('获取指定记忆(页面详情):路径(entities/Redis.md)或裸实体名(Redis)')
+  .action(run((client, opts: AnyOpts, args) => getPage(client, opts, args)));
+
 program
   .command('delete <page...>')
   .description(

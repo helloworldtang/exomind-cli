@@ -62,7 +62,7 @@ export default async function deletePage(
     }
   }
 
-  const r = await client.del(`/pages/${encPath(target)}`);
+  const r = await client.del(`/pages/${encPath(target)}`, { timeoutMs: 60000 });
   output(r, () => {
     console.log(ok(`已删除: ${r.path}`));
     if (r.trash_path) console.log(dim(`回收站: ${r.trash_path} — exomind trash 查看 / trash restore 恢复`));

@@ -43,6 +43,7 @@ async function doList(client: ApiClient, opts: TrashOpts): Promise<void> {
 async function doRestore(client: ApiClient, trashPath?: string): Promise<void> {
   const p = (trashPath ?? '').trim();
   if (!p) throw new Error('请提供回收站路径: exomind trash restore ".trash/202609/entities/Redis.md"');
-  const r = await client.post('/trash/restore', { trash_path: p });
+  // restore 服务端要刷 FTS/npz 索引,数据多时几十秒 → 超时放宽到 120s
+  const r = await client.post('/trash/restore', { trash_path: p }, { timeoutMs: 120000 });
   output(r, () => console.log(ok(`已恢复 → ${r.path}`)));
 }
