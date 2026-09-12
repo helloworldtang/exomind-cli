@@ -1,6 +1,7 @@
 /** exomind trash <action> — 服务端回收站:list 列表 / restore <回收站路径> 恢复。
  *  服务端语义:删除 = 移入 .trash/<YYYYMM>/,不物理删除;恢复要求原路径空闲。 */
 import type { ApiClient } from '../api';
+import { opTimeout } from '../api';
 import { output, ok, cyan, dim, yellow } from '../format';
 
 type TrashOpts = Record<string, any>;
@@ -43,7 +44,8 @@ async function doList(client: ApiClient, opts: TrashOpts): Promise<void> {
 async function doRestore(client: ApiClient, trashPath?: string): Promise<void> {
   const p = (trashPath ?? '').trim();
   if (!p) throw new Error('请提供回收站路径: exomind trash restore ".trash/202609/entities/Redis.md"');
-  // restore 服务端要刷 FTS/npz 索引,数据多时几十秒 → 超时放宽到 120s
-  const r = await client.post('/trash/restore', { trash_path: p }, { timeoutMs: 120000 });
+  console.log(dim('恢复中…大知识库刷索引可能需要一两分钟,请勿关闭'));
+  // restore 服务端要刷 FTS/npz 索引,2C2G 大库实测可超 120s → 放宽到 300s(对齐 draft 生成)
+  const r = await client.post('/trash/restore', { trash_path: p }, { timeoutMs: opTimeout(300000) });
   output(r, () => console.log(ok(`已恢复 → ${r.path}`)));
 }
