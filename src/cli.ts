@@ -26,6 +26,8 @@ import feedback from './commands/feedback';
 import daily from './commands/daily';
 import login from './commands/login';
 import whoami from './commands/whoami';
+import deletePage from './commands/delete';
+import trash from './commands/trash';
 import installCmd from './commands/install';
 import doctor from './commands/doctor';
 
@@ -123,6 +125,21 @@ program
     3,
   )
   .action(run(ingest));
+
+// ── 删除 / 回收站 ──
+program
+  .command('delete <page...>')
+  .description(
+    '删除知识页(软删除:入服务端回收站,可恢复)。支持路径(entities/Redis.md)或裸实体名(Redis)',
+  )
+  .option('-y, --yes', '跳过确认')
+  .action(run((client, opts: AnyOpts, args) => deletePage(client, opts, args)));
+
+program
+  .command('trash <action> [target...]')
+  .description('回收站: list 列表 / restore <回收站路径> 恢复')
+  .option('-p, --page <n>', '页码(list)', '1')
+  .action(run((client, opts: AnyOpts, args) => trash(client, opts, args)));
 
 // ── 查询 ──
 program

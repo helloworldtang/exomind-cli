@@ -114,4 +114,8 @@ export class ApiClient {
   post(p: string, body?: unknown, opts?: Omit<RequestOptions, 'body' | 'query'>): Promise<any> {
     return this.request('POST', p, { ...opts, body });
   }
+
+  del(p: string, opts?: Omit<RequestOptions, 'query' | 'body'>): Promise<any> {
+    return this.request('DELETE', p, opts);
+  }
 }
