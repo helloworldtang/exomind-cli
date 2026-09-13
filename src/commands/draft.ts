@@ -1,4 +1,4 @@
-/** exomind draft <action> — 草稿生成/列表/详情/发布知识库/投递公众号。
+/** exomind draft <action> — 草稿生成/列表/详情/发布知识飞轮/投递公众号。
  *  替代 gen_article.py(瘦客户端):new = generate + save 两步合一。 */
 import type { ApiClient } from '../api';
 import { opTimeout } from '../api';
@@ -114,7 +114,7 @@ async function doPublish(client: ApiClient, id: string | undefined): Promise<voi
     { timeoutMs: opTimeout(300000) },
   );
   output(r, () => {
-    console.log(ok('✓ 已发布到知识库'));
+    console.log(ok('✓ 已发布到知识飞轮'));
     if (r.summary) console.log(dim(`  ${r.summary}`));
     if (r.entities != null) console.log(dim(`  实体 ${r.entities} / 概念 ${r.concepts ?? 0}`));
   });

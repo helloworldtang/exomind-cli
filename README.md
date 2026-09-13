@@ -1,6 +1,6 @@
 # exomind
 
-> ExoMind 知识库的跨平台命令行客户端。通过 REST 与服务器交互,装一次,Windows / macOS / Linux 一致可用。
+> ExoMind 知识飞轮的跨平台命令行客户端。通过 REST 与服务器交互,装一次,Windows / macOS / Linux 一致可用。
 
 替代在 Windows 上连不上的 MCP 客户端;Mac/Linux 同样适用。对标 PipeOne 的 `@pipeone/cli` + skill 模式。
 
@@ -32,7 +32,7 @@ exomind ingest --dir ./notes --recursive      # 目录批量(增量: SHA-256 跳
 exomind query "Redis RDB 和 AOF 的区别?"
 exomind search "Redis 持久化" --rerank
 exomind entity "Redis"          # 实体详情 + 关系
-exomind stats                   # 知识库统计
+exomind stats                   # 知识飞轮统计
 
 # 飞轮
 exomind review                  # FSRS-5 间隔复习
@@ -75,7 +75,7 @@ exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主)
 
 重启 Claude Code 后:
 - 说 **`存档`** / **`jdit`** → 自动回顾会话、摄入。
-- 提问涉及知识库已有实体 → 自动注入 `[ExoMind 知识库上下文]`。
+- 提问涉及知识飞轮已有实体 → 自动注入 `[ExoMind 知识飞轮上下文]`。
 - Agent 需查询/摄入时 → 直接调 `mcp__exomind__*`(确定),或按 skill 跑 `exomind` CLI。
 
 完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
@@ -102,7 +102,7 @@ exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主)
 | `query` | LLM 问答 |
 | `search` | 全文 / `--hybrid` / `--rerank` 搜索 |
 | `entity` / `relations` | 实体详情、关联实体 |
-| `stats` | 知识库统计 |
+| `stats` | 知识飞轮统计 |
 | `review` / `review mark` | FSRS-5 复习队列与评分 |
 | `synthesize` / `topics` / `gaps` / `daily` | 主题综合、选题、缺口、每日摘要 |
 | `feedback` | 质量反馈(影响搜索排名) |

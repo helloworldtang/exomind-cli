@@ -1,6 +1,6 @@
 ---
 name: exomind
-description: Use ExoMind to save, ingest, import, search, query, and retrieve knowledge. Trigger when the user asks to remember, archive, save, ingest, import, search, query, or review knowledge, including shorthand commands such as "jdit", "存档", "记住这个", "保存到 ExoMind", "导入", and "查询知识库". Also use it when durable lessons, architectural decisions, investigation results, or root causes should be persisted. Treat these explicit save/import commands as authorization for that write. Do not silently write ordinary conversation to ExoMind. For a directory or multiple files, use one directory ingest command instead of reading or ingesting files individually.
+description: Use ExoMind to save, ingest, import, search, query, and retrieve knowledge. Trigger when the user asks to remember, archive, save, ingest, import, search, query, or review knowledge, including shorthand commands such as "jdit", "存档", "记住这个", "保存到 ExoMind", "导入", and "查询知识库"/"查询知识飞轮". Also use it when durable lessons, architectural decisions, investigation results, or root causes should be persisted. Treat these explicit save/import commands as authorization for that write. Do not silently write ordinary conversation to ExoMind. For a directory or multiple files, use one directory ingest command instead of reading or ingesting files individually.
 ---
 
 # ExoMind (Codex)
@@ -9,7 +9,7 @@ ExoMind is a remote knowledge base. Use it to persist durable knowledge and to r
 
 ## Authorization (important)
 
-- Explicit requests — `jdit`, `存档`, `记住这个`, `保存到 ExoMind`, `导入`, `写入知识库` — authorize THAT write. Proceed.
+- Explicit requests — `jdit`, `存档`, `记住这个`, `保存到 ExoMind`, `导入`, `写入知识库`/`写入知识飞轮` — authorize THAT write. Proceed.
 - Do NOT call a write/ingest for ordinary Q&A with no save intent. You may suggest saving if something is durable.
 - Preserve all Codex tool approvals, sandbox, and host security checks. A user's "jdit" is business authorization, not a reason to bypass host-level confirmations.
 - Read-only retrieval (query / search / entity / relations / stats) may be used whenever the user asks to recall, search, review, or check prior knowledge.

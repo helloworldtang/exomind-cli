@@ -1,6 +1,6 @@
 /**
  * exomind — ExoMind 跨平台命令行客户端。
- * 通过 REST 与 ExoMind 知识库交互,替代 Windows 不可用的 MCP 客户端。
+ * 通过 REST 与 ExoMind 知识飞轮交互,替代 Windows 不可用的 MCP 客户端。
  */
 import { Command } from 'commander';
 import pkg from '../package.json' assert { type: 'json' };
@@ -84,7 +84,7 @@ const program = new Command();
 
 program
   .name('exomind')
-  .description('ExoMind 跨平台知识库客户端 — 通过 REST 交互(替代 Windows MCP 客户端)。')
+  .description('ExoMind 跨平台知识飞轮客户端 — 通过 REST 交互(替代 Windows MCP 客户端)。')
   .version(VERSION)
   .option('--json', '输出原始 JSON(机器可读)')
   .option('--base-url <url>', '覆盖服务器地址')
@@ -176,7 +176,7 @@ program
 
 program
   .command('stats')
-  .description('知识库统计')
+  .description('知识飞轮统计')
   .action(run(stats));
 
 // ── 复习 ──

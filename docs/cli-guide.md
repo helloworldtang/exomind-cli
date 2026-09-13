@@ -1,6 +1,6 @@
 # ExoMind CLI 命令指南
 
-`exomind` 是 ExoMind 知识库的跨平台命令行客户端,通过 REST 与服务器交互。
+`exomind` 是 ExoMind 知识飞轮的跨平台命令行客户端,通过 REST 与服务器交互。
 替代 Windows 上不可用的 MCP 客户端;Mac/Linux 同样适用。
 
 - 包名:`exomind`(npm)
@@ -74,7 +74,7 @@ exomind search "关键词" -l 20         # 限制返回数
 | `search [keyword...]` `-l,--limit` `--rerank` `--hybrid` | 全文/混合/精排 |
 | `entity [name...]` | 实体详情 + 关系 |
 | `relations [name...]` `-d,--depth 1-3` | 关联实体(可达性) |
-| `stats` | 知识库统计(节点/关系/类型分布) |
+| `stats` | 知识飞轮统计(节点/关系/类型分布) |
 
 ### 复习与反馈(飞轮)
 

@@ -1,4 +1,4 @@
-/** exomind stats — 知识库统计。 */
+/** exomind stats — 知识飞轮统计。 */
 import type { ApiClient } from '../api';
 import { output, cyan, dim } from '../format';
 

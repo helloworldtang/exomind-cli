@@ -264,7 +264,7 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
       (m) => !(m.hooks || []).some((h) => String(h.command || '').includes('exomind')),
     );
     kept.push({
-      hooks: [{ type: 'command', command: 'exomind hook', statusMessage: 'ExoMind 知识库检索' }],
+      hooks: [{ type: 'command', command: 'exomind hook', statusMessage: 'ExoMind 知识飞轮检索' }],
     });
     hooks.UserPromptSubmit = kept;
     settings.hooks = hooks;

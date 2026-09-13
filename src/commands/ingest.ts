@@ -73,7 +73,7 @@ export default async function ingest(
   }
 
   output(result, () => {
-    console.log(ok('已导入服务器知识库'));
+    console.log(ok('已导入服务器知识飞轮'));
     if (opts.title) console.log(dim(`  标题: ${opts.title}`));
     console.log(`  ${green('实体')}: ${result.entities ?? 0}   ${green('概念')}: ${result.concepts ?? 0}`);
     if (result.summary) console.log(dim(`  摘要: ${truncate(result.summary, 120)}`));

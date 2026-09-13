@@ -20,12 +20,12 @@ If a command fails with "未登录", run `exomind login` first.
 
 ## 数据位置(重要 — 勿误报)
 
-**所有知识库数据都在服务器(youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
+**所有知识飞轮数据都在服务器(youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
 - `~/.exomind/config.json` — 凭证
 - `~/.exomind/cache/` — hook 的关键词/实体缓存(从服务器拉的副本)
-- `~/.exomind/manifest.json` — 目录增量摄入的内容哈希清单(去重用,非知识库本身)
+- `~/.exomind/manifest.json` — 目录增量摄入的内容哈希清单(去重用,非知识飞轮本身)
 
-摄入成功后输出 `✓ 已导入服务器知识库`。若要确认数据落地,用 `exomind search <关键词>` 复查。**不要向用户报告"已保存到 ~/my-wiki/entities/X.md"等本地路径——那是错的。**
+摄入成功后输出 `✓ 已导入服务器知识飞轮`。若要确认数据落地,用 `exomind search <关键词>` 复查。**不要向用户报告"已保存到 ~/my-wiki/entities/X.md"等本地路径——那是错的。**
 
 ## 性能注意(ingest / query / synthesize 较慢)
 
@@ -73,7 +73,7 @@ exomind search "关键词" --hybrid     # +向量语义:同义/跨语言/概念�
 exomind search "关键词" --rerank     # +LLM 精排(最高准、慢;候选不多时)
 exomind entity "Redis"               # 实体详情 + 关系
 exomind relations "Redis" --depth 2  # 关联实体
-exomind stats                        # 知识库统计
+exomind stats                        # 知识飞轮统计
 exomind topics                       # 选题推荐
 exomind gaps                         # 知识缺口(驱动摄入)
 exomind daily                        # 每日摘要
@@ -86,7 +86,7 @@ exomind topics                              # 选题推荐(基于图谱密度)
 exomind draft new "选题" [--account <号>]    # 生成草稿 + 保存(LLM,1-3min;替代 gen_article.py)
 exomind draft list [--status <状态>]         # 草稿列表
 exomind draft show <id>                      # 看正文
-exomind draft publish <id>                   # 发布到知识库(入库,走 ingest)
+exomind draft publish <id>                   # 发布到知识飞轮(入库,走 ingest)
 exomind draft wechat <id> --account <号>     # 投递公众号草稿箱(真发,返回 media_id;后台仍需群发)
 ```
 链路:`topics` 选题 → `draft new` 生成 → `list/show` 审 → `publish` 入库 / `wechat` 发公众号。

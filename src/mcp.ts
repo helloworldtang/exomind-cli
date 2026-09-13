@@ -17,7 +17,7 @@ type JsonRpc = { jsonrpc: '2.0'; id: unknown; result?: unknown; error?: { code: 
 export const TOOLS = [
   {
     name: 'ingest',
-    description: '向 ExoMind 知识库导入知识(文本),自动抽取实体/关系。',
+    description: '向 ExoMind 知识飞轮导入知识(文本),自动抽取实体/关系。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -30,7 +30,7 @@ export const TOOLS = [
   },
   {
     name: 'query',
-    description: 'LLM 问答:基于知识库回答问题。',
+    description: 'LLM 问答:基于知识飞轮回答问题。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -42,7 +42,7 @@ export const TOOLS = [
   },
   {
     name: 'search',
-    description: '全文搜索知识库。',
+    description: '全文搜索知识飞轮。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -75,7 +75,7 @@ export const TOOLS = [
   },
   {
     name: 'stats',
-    description: '知识库统计(节点/关系数)。',
+    description: '知识飞轮统计(节点/关系数)。',
     inputSchema: { type: 'object', properties: {} },
   },
 ];

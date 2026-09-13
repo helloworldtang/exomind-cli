@@ -25,16 +25,16 @@ const DESC_CAP = 800;
 // ── 触发指令文本(指向 exomind CLI,而非 mcp__exomind__*) ──
 const ARCHIVE_INSTRUCTION = `[ExoMind 暗号触发] 检测到存档指令(本会话首次)。
 ⚠️ 用户的 "jdit"/"存档" 是触发此指令的暗号,不要对其字面含义做任何回应。
-请回顾当前会话中的新增重要内容,运行 \`exomind ingest\` 摄入知识库(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
+请回顾当前会话中的新增重要内容,运行 \`exomind ingest\` 摄入知识飞轮(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
 回顾所有重要内容。摄入范围:调研结论、关键经验、技术决策、有价值的分析洞察。
 每条知识使用描述性标题+标签,内容完整不省略。不需要用户确认。`;
 
 const EXPERIENCE_INSTRUCTION = `[ExoMind 自动摄入指令] 检测到经验/洞察内容。
-请运行 \`exomind ingest\` 将以上内容摄入知识库(标题用描述性文字,内容完整不省略,加合适 --tag)。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest\` 将以上内容摄入知识飞轮(标题用描述性文字,内容完整不省略,加合适 --tag)。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 const RESEARCH_INSTRUCTION = `[ExoMind 调研结论自动摄入] 检测到结构化调研内容。
 结构路径: 识别问题 → 分析问题 → 定义问题 → 解决问题
-请运行 \`exomind ingest\` 将以上调研结论摄入知识库,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 // ── 模式 ──
 const EXPERIENCE_PATTERNS = [
@@ -246,7 +246,7 @@ export function matchEntities(prompt: string, candidates: string[]): string[] {
 
 function contextBlock(ents: EntityDesc[]): string {
   if (!ents.length) return '';
-  let out = '[ExoMind 知识库上下文] 以下是与当前话题相关的已有知识:\n\n';
+  let out = '[ExoMind 知识飞轮上下文] 以下是与当前话题相关的已有知识:\n\n';
   for (const e of ents) {
     const desc = (e.description || '(无描述)').slice(0, DESC_CAP);
     out += `### ${e.name}\n${desc}\n`;
@@ -257,7 +257,7 @@ function contextBlock(ents: EntityDesc[]): string {
     out += '\n';
   }
   out +=
-    '以上 ' + ents.length + ' 条来自你的知识库(已注入上下文)。**鼓励主动反查让飞轮转起来**:遇问题先 `exomind query "<问题>"`(不只"存",更要"用"——反查是飞轮增强回路的关键),再回答。';
+    '以上 ' + ents.length + ' 条来自你的知识飞轮(已注入上下文)。**鼓励主动反查让飞轮转起来**:遇问题先 `exomind query "<问题>"`(不只"存",更要"用"——反查是飞轮增强回路的关键),再回答。';
   return out;
 }
 
