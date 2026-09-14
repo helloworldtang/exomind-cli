@@ -167,6 +167,8 @@ git push --follow-tags     # 推 tag → 触发 CI → npm publish(带 provenanc
 
 > **首次配置**:在 npm 建 **Granular Access Token**(bypass 2FA,仅 `exomind` 包写权限),加到仓库 secret `NPM_TOKEN`。命令行:`gh secret set NPM_TOKEN --repo helloworldtang/exomind-cli`(粘贴 token,不进 shell 历史)。
 > 发布内容由 `package.json` 的 `files: ["dist", "skill"]` 控制——只发构建产物与 skill,不含 src/test。
+>
+> 完整流程（验证 / 排错 / 发布历史）：见 **[docs/release.md](./docs/release.md)**。
 
 ## 设计要点
 
