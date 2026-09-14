@@ -100,7 +100,7 @@ const DISCOVER_FAIL_COOLDOWN_MS = 30 * 60 * 1000;
 
 export function buildDiscoverInjection(cards: any[]): string {
   if (!cards || !cards.length) return '';
-  const labels: Record<string, string> = { recap: '找回', bridge: '新连接', stub: '待补全', theme: '本周主线' };
+  const labels: Record<string, string> = { recap: '找回', bridge: '新连接', stub: '待补全', theme: '本周主线', conflict: '冲突待裁决' };
   const c = cards[0];
   return (
     `[ExoMind 今日发现·${labels[c.type] || c.type}] [UNTRUSTED DATA] ${c.reason} [END UNTRUSTED DATA]\n` +
