@@ -22,6 +22,16 @@ const COOLDOWN_MS = 30 * 60 * 1000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const DESC_CAP = 800;
 
+// ── R10：hook 绝对 deadline——UserPromptSubmit 不能被网络拖住；deadline = min(配置, 3000ms) ──
+const HOOK_TIMEOUT_CAP_MS = 3000;
+export function hookDeadlineMs(): number {
+  const configured = Number(process.env.EXOMIND_HOOK_TIMEOUT_MS) || HOOK_TIMEOUT_CAP_MS;
+  return Math.min(configured, HOOK_TIMEOUT_CAP_MS);
+}
+function budgetMs(deadline: number): number {
+  return deadline - Date.now();
+}
+
 // ── 触发指令文本(指向 exomind CLI,而非 mcp__exomind__*) ──
 const ARCHIVE_INSTRUCTION = `[ExoMind 暗号触发] 检测到存档指令(本会话首次)。
 ⚠️ 用户的 "jdit"/"存档" 是触发此指令的暗号,不要对其字面含义做任何回应。
@@ -116,15 +126,21 @@ function saveDiscoverState(st: object): void {
   }
 }
 
-export async function dailyDiscoverInjection(client: ApiClient): Promise<string> {
+export async function dailyDiscoverInjection(
+  client: ApiClient,
+  deadline: number = Number.POSITIVE_INFINITY,
+): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const st = readDiscoverState();
   if (st.date === today && st.done) return '';
   if (st.date === today && st.failed && Date.now() - st.failed < DISCOVER_FAIL_COOLDOWN_MS) {
     return '';
   }
+  if (budgetMs(deadline) <= 200) return ''; // R10：预算耗尽静默跳过（不计失败冷却，下条 prompt 再试）
   try {
-    const data = await client.get('/daily-discovery', undefined, { timeoutMs: 8000 });
+    const data = await client.get('/daily-discovery', undefined, {
+      timeoutMs: Math.max(200, Math.min(8000, budgetMs(deadline))),
+    });
     saveDiscoverState({ date: today, done: true, ts: Date.now() });
     return buildDiscoverInjection(data.discoveries || []);
   } catch {
@@ -184,39 +200,79 @@ export function matchesResearch(msg: string): boolean {
   return (score >= 2 && phases >= 3) || (score >= 3 && hasStructure && phases >= 2);
 }
 
-async function getKeywordIndex(
+export async function getKeywordIndex(
   client: ApiClient,
+  deadline: number = Number.POSITIVE_INFINITY,
 ): Promise<{ names: string[]; aliases: string[] } | null> {
+  let cacheCorrupt = false;
   try {
     const st = fs.statSync(CACHE_KEYWORDS);
     if (Date.now() - st.mtimeMs < CACHE_TTL_MS) {
       return JSON.parse(fs.readFileSync(CACHE_KEYWORDS, 'utf-8'));
     }
-  } catch {
-    /* 无缓存,刷新 */
+  } catch (e) {
+    if (e instanceof SyntaxError) cacheCorrupt = true;
+    /* 无缓存继续刷新；坏缓存见下（零重试） */
   }
+  if (cacheCorrupt) {
+    // R10：坏 JSON 零重试——删除损坏缓存，本会话走机械回退（不注入），下次会话重建
+    try {
+      fs.unlinkSync(CACHE_KEYWORDS);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+  if (budgetMs(deadline) <= 200) return null; // R10：预算耗尽 → 机械回退（跳过注入）
   try {
-    const data = await client.get('/keywords');
+    const data = await client.get('/keywords', undefined, {
+      timeoutMs: Math.max(200, Math.min(3000, budgetMs(deadline))),
+    });
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     fs.writeFileSync(CACHE_KEYWORDS, JSON.stringify(data));
     return { names: data.names || [], aliases: data.aliases || [] };
   } catch {
-    return null; // 无认证/网络 → 跳过注入
+    return null; // 无认证/网络/超时 → 跳过注入
   }
 }
 
-async function getEntityDesc(client: ApiClient, name: string): Promise<EntityDesc> {
+async function getEntityDesc(
+  client: ApiClient,
+  name: string,
+  deadline: number = Number.POSITIVE_INFINITY,
+): Promise<EntityDesc> {
   const file = path.join(CACHE_ENTITIES_DIR, `${safe(name)}.json`);
+  let cacheCorrupt = false;
   try {
     const st = fs.statSync(file);
     if (Date.now() - st.mtimeMs < CACHE_TTL_MS) {
       return JSON.parse(fs.readFileSync(file, 'utf-8')) as EntityDesc;
     }
-  } catch {
+  } catch (e) {
+    if (e instanceof SyntaxError) cacheCorrupt = true;
     /* miss */
   }
+  if (cacheCorrupt) {
+    // R10：坏 JSON 零重试——删除损坏缓存，返回机械空描述
+    try {
+      fs.unlinkSync(file);
+    } catch {
+      /* ignore */
+    }
+    return { name, description: '' };
+  }
+  if (budgetMs(deadline) <= 200) {
+    // R10：预算耗尽 → 有过期缓存就用，没有就空描述（不发网络请求）
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf-8')) as EntityDesc;
+    } catch {
+      return { name, description: '' };
+    }
+  }
   try {
-    const ent = await client.get(`/entities/${encodeURIComponent(name)}`);
+    const ent = await client.get(`/entities/${encodeURIComponent(name)}`, undefined, {
+      timeoutMs: Math.max(200, Math.min(3000, budgetMs(deadline))),
+    });
     const desc: EntityDesc = {
       name: ent.name || name,
       type: ent.type,
@@ -270,8 +326,9 @@ async function buildContext(
   msg: string,
   dedup: DedupState,
   now: number,
+  deadline: number = Number.POSITIVE_INFINITY,
 ): Promise<string> {
-  const index = await getKeywordIndex(client);
+  const index = await getKeywordIndex(client, deadline);
   if (!index) return '';
   const candidates = [...(index.names || []), ...(index.aliases || [])];
   const matched = matchEntities(msg, candidates);
@@ -280,10 +337,11 @@ async function buildContext(
   const picked: EntityDesc[] = [];
   for (const name of matched) {
     if (picked.length >= 3) break;
+    if (budgetMs(deadline) <= 200) break; // R10：预算耗尽 → 停止取更多实体
     // 会话去重:30 分钟内已注入的不再注入
     const canonical = name;
     if (dedup.injected[canonical] && now - dedup.injected[canonical] < COOLDOWN_MS) continue;
-    const desc = await getEntityDesc(client, name);
+    const desc = await getEntityDesc(client, name, deadline);
     if (desc.description || desc.relationships?.length) {
       picked.push(desc);
       dedup.injected[canonical] = now;
@@ -293,6 +351,7 @@ async function buildContext(
 }
 
 export async function runHook(client: ApiClient): Promise<void> {
+  const deadline = Date.now() + hookDeadlineMs(); // R10：全流程绝对 deadline
   const raw = await readStdin();
   if (!raw) return;
 
@@ -337,7 +396,7 @@ export async function runHook(client: ApiClient): Promise<void> {
 
   // 6. 关键词上下文注入
   try {
-    const ctx = await buildContext(client, msg, dedup, now);
+    const ctx = await buildContext(client, msg, dedup, now, deadline);
     if (ctx) outputs.push(ctx);
   } catch {
     /* 注入失败不影响主流程 */
@@ -345,7 +404,7 @@ export async function runHook(client: ApiClient): Promise<void> {
 
   // 7. 今日发现注入(每天首条有效 prompt 一次,失败 30 分钟冷却)
   try {
-    const discover = await dailyDiscoverInjection(client);
+    const discover = await dailyDiscoverInjection(client, deadline);
     if (discover) outputs.push(discover);
   } catch {
     /* 注入失败不影响主流程 */

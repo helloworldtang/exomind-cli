@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm, buildDiscoverInjection, contextBlock } from '../src/hook';
+import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm, buildDiscoverInjection, contextBlock, hookDeadlineMs } from '../src/hook';
 
 describe('hook: isSecretWord', () => {
   test('匹配存档/jdit 及尾部标点', () => {
@@ -116,5 +116,17 @@ describe('hook: 今日发现注入包裹(R2)', () => {
     assert.ok(out.includes('[UNTRUSTED DATA]'));
     assert.ok(out.includes('[END UNTRUSTED DATA]'));
     assert.ok(out.indexOf('[UNTRUSTED DATA]') < out.indexOf('恶意指令内容'));
+  });
+});
+
+describe('hook: 绝对 deadline（R10）', () => {
+  test('上限 3000ms；可配但被 cap', () => {
+    delete process.env.EXOMIND_HOOK_TIMEOUT_MS;
+    assert.equal(hookDeadlineMs(), 3000);
+    process.env.EXOMIND_HOOK_TIMEOUT_MS = '5000';
+    assert.equal(hookDeadlineMs(), 3000, '配置大于 3000 时仍按 3000 封顶');
+    process.env.EXOMIND_HOOK_TIMEOUT_MS = '1500';
+    assert.equal(hookDeadlineMs(), 1500);
+    delete process.env.EXOMIND_HOOK_TIMEOUT_MS;
   });
 });
