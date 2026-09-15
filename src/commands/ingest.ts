@@ -29,6 +29,7 @@ export default async function ingest(
     recursive?: boolean;
     pattern?: string;
     force?: boolean;
+    fast?: boolean;
     concurrency?: number;
   },
   args: string[],
@@ -56,6 +57,29 @@ export default async function ingest(
   }
   if (content.length > 50000) {
     throw new Error(`内容过长(${content.length} 字符),上限 50000`);
+  }
+
+  if (opts.fast) {
+    // R3-lite(2026-09-15):快速模式——原文秒存并可立即被检索,实体/关系精炼转后台;
+    // Agent 自动存档(hook 触发)推荐用它,不再同步等 LLM 抽取。
+    const fastBody: Record<string, unknown> = { content };
+    if (opts.title) fastBody.title = opts.title;
+    if (opts.tag && opts.tag.length) fastBody.tags = opts.tag;
+    const result = await ingestWithRetry(client, fastBody, opTimeout(30000), '/ingest/async');
+    if (fileAbs && fileRaw !== null) {
+      const man = loadManifest();
+      recordFile(man, fileAbs, fileRaw, opts.title || path.basename(fileAbs));
+      saveManifest(man);
+    }
+    output(result, () => {
+      console.log(ok('已快速存入: 原文已可检索,实体/关系精炼在后台进行'));
+      console.log(
+        dim(
+          `  任务: job_id=${result.job_id} · 进度: ${result.poll ?? `/ingest/status?job_id=${result.job_id}`}`,
+        ),
+      );
+    });
+    return;
   }
 
   const body: Record<string, unknown> = { content };

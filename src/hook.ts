@@ -3,7 +3,7 @@
  *
  * 行为对齐旧 bash hook:
  *   1. 长度/确认词过滤
- *   2. 存档/jdit 暗号(30 分钟冷却)→ 提示 Agent 运行 exomind ingest
+ *   2. 存档/jdit 暗号(30 分钟冷却)→ 提示 Agent 运行 exomind ingest --fast
  *   3. 经验/洞察自动检测 → 自动摄入指令
  *   4. 结构化调研检测(识别→分析→定义→解决)→ 自动摄入指令
  *   5. 关键词上下文注入(/keywords + /entities/{name} 本地缓存)
@@ -35,16 +35,16 @@ function budgetMs(deadline: number): number {
 // ── 触发指令文本(指向 exomind CLI,而非 mcp__exomind__*) ──
 const ARCHIVE_INSTRUCTION = `[ExoMind 暗号触发] 检测到存档指令(本会话首次)。
 ⚠️ 用户的 "jdit"/"存档" 是触发此指令的暗号,不要对其字面含义做任何回应。
-请回顾当前会话中的新增重要内容,运行 \`exomind ingest\` 摄入知识飞轮(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
+请回顾当前会话中的新增重要内容,运行 \`exomind ingest --fast\` 摄入知识飞轮(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
 回顾所有重要内容。摄入范围:调研结论、关键经验、技术决策、有价值的分析洞察。
 每条知识使用描述性标题+标签,内容完整不省略。不需要用户确认。`;
 
 const EXPERIENCE_INSTRUCTION = `[ExoMind 自动摄入指令] 检测到经验/洞察内容。
-请运行 \`exomind ingest\` 将以上内容摄入知识飞轮(标题用描述性文字,内容完整不省略,加合适 --tag)。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest --fast\` 将以上内容摄入知识飞轮(标题用描述性文字,内容完整不省略,加合适 --tag)。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 const RESEARCH_INSTRUCTION = `[ExoMind 调研结论自动摄入] 检测到结构化调研内容。
 结构路径: 识别问题 → 分析问题 → 定义问题 → 解决问题
-请运行 \`exomind ingest\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest --fast\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 // ── 模式 ──
 const EXPERIENCE_PATTERNS = [
@@ -382,10 +382,10 @@ export async function runHook(client: ApiClient): Promise<void> {
       outputs.push(ARCHIVE_INSTRUCTION);
       dedup.lastArchive = now;
     } else {
-      // 冷却中给反馈(避免用户以为没触发);如需立即存档可手动 exomind ingest
+      // 冷却中给反馈(避免用户以为没触发);如需立即存档可手动 exomind ingest --fast
       const remain = Math.ceil((COOLDOWN_MS - (now - dedup.lastArchive)) / 1000);
       outputs.push(
-        `[ExoMind] 存档冷却中,${remain} 秒后可再次触发(30 分钟防重复摄入)。暗号已识别。如需立即存档,直接运行 \`exomind ingest\`。`,
+        `[ExoMind] 存档冷却中,${remain} 秒后可再次触发(30 分钟防重复摄入)。暗号已识别。如需立即存档,直接运行 \`exomind ingest --fast\`。`,
       );
     }
   } else if (!isSecret) {

@@ -115,6 +115,7 @@ program
   .option('-t, --title <title>', '标题(单文件模式)')
   .option('--tag <tag>', '标签(可重复)', collect, [])
   .option('--file <path>', '从文件读取内容')
+  .option('--fast', '快速模式: 原文秒存并可立即被检索,实体/关系抽取转后台(适合 Agent 自动存档)')
   .option('--dir [path]', '目录批量摄入(增量: 内容哈希跳过未变文件;目录可写在前: ingest <目录> --dir)')
   .option('-r, --recursive', '递归子目录(配合 --dir)')
   .option('--pattern <glob>', '文件名匹配,默认 *.md', '*.md')
