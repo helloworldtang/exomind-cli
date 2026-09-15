@@ -7,7 +7,8 @@
  *   3. 经验/洞察自动检测 → 自动摄入指令
  *   4. 结构化调研检测(识别→分析→定义→解决)→ 自动摄入指令
  *   5. 关键词上下文注入(/keywords + /entities/{name} 本地缓存)
- *   6. 会话去重(30 分钟)
+ *   6. 会话去重(30 分钟)——冷却跳过与关键词表拉取失败输出一行可见提示,不静默
+ *      (静默会被误判「知识飞轮查不到」;2026-09-15 harness 同词时有时无即此误判)
  *
  * 零 bash/python/curl/本地 wiki 依赖,Windows 原生可用。
  * 读 stdin {prompt},输出 additionalContext 纯文本到 stdout。
@@ -81,7 +82,7 @@ interface EntityDesc {
   relationships?: { type: string; entity: string; confidence?: number }[];
 }
 
-interface DedupState {
+export interface DedupState {
   injected: Record<string, number>;
   lastArchive: number;
 }
@@ -288,13 +289,31 @@ async function getEntityDesc(
   }
 }
 
+// 短 ASCII 候选(≤4 字符)极易子串误命中——别名 "es" 会从 "harness" 中间命中、
+// "cr" 从 "Micro" 命中,挤占 3 个注入名额。这类候选要求词边界;长候选保留子串
+// 匹配(复数/复合词仍可命中),含 CJK 的候选无词边界概念,同样走子串。
+const SHORT_ASCII = /^[a-z0-9._#+-]{2,4}$/;
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function hitsPrompt(promptLower: string, candLower: string): boolean {
+  if (SHORT_ASCII.test(candLower)) {
+    try {
+      return new RegExp(`(?<![a-z0-9])${escapeRegExp(candLower)}(?![a-z0-9])`).test(promptLower);
+    } catch {
+      return promptLower.includes(candLower);
+    }
+  }
+  return promptLower.includes(candLower);
+}
+
 export function matchEntities(prompt: string, candidates: string[]): string[] {
   const lower = prompt.toLowerCase();
   const hits = new Set<string>();
   for (const name of candidates) {
     const nl = name.toLowerCase().trim();
     if (nl.length < 2) continue;
-    if (lower.includes(nl)) hits.add(name);
+    if (hitsPrompt(lower, nl)) hits.add(name);
   }
   // 较长的名称优先(更具体)
   return [...hits].sort((a, b) => b.length - a.length);
@@ -321,7 +340,7 @@ export function contextBlock(ents: EntityDesc[]): string {
   return out;
 }
 
-async function buildContext(
+export async function buildContext(
   client: ApiClient,
   msg: string,
   dedup: DedupState,
@@ -329,23 +348,45 @@ async function buildContext(
   deadline: number = Number.POSITIVE_INFINITY,
 ): Promise<string> {
   const index = await getKeywordIndex(client, deadline);
-  if (!index) return '';
+  if (!index) {
+    // 拉取失败/超时不再静默——让用户与 Agent 知道「不是没有知识,是本次没注入」
+    return '[ExoMind] 知识飞轮上下文本次未注入(关键词表拉取超时或失败);需要反查可运行 `exomind search "关键词"`。';
+  }
   const candidates = [...(index.names || []), ...(index.aliases || [])];
   const matched = matchEntities(msg, candidates);
   if (!matched.length) return '';
 
   const picked: EntityDesc[] = [];
+  const pickedCanonical = new Set<string>();
+  const cooled: string[] = [];
   for (const name of matched) {
     if (picked.length >= 3) break;
     if (budgetMs(deadline) <= 200) break; // R10：预算耗尽 → 停止取更多实体
-    // 会话去重:30 分钟内已注入的不再注入
+    // 会话去重:30 分钟内已注入的不再注入(机器级共享状态,跨所有会话生效)
     const canonical = name;
-    if (dedup.injected[canonical] && now - dedup.injected[canonical] < COOLDOWN_MS) continue;
+    if (dedup.injected[canonical] && now - dedup.injected[canonical] < COOLDOWN_MS) {
+      cooled.push(name);
+      continue;
+    }
     const desc = await getEntityDesc(client, name, deadline);
     if (desc.description || desc.relationships?.length) {
-      picked.push(desc);
       dedup.injected[canonical] = now;
+      // name 与 alias 双路命中同一实体时只注入一次(按服务端规范名去重)
+      const norm = (desc.name || name).toLowerCase();
+      if (pickedCanonical.has(norm)) continue;
+      pickedCanonical.add(norm);
+      picked.push(desc);
     }
+  }
+  if (!picked.length && cooled.length) {
+    const remainMin = Math.ceil(
+      (COOLDOWN_MS - (now - Math.max(...cooled.map((n) => dedup.injected[n] ?? 0)))) / 60000,
+    );
+    const sample = cooled
+      .slice(0, 2)
+      .map((n) => `"${n}"`)
+      .join('、');
+    return `[ExoMind] ${sample} 等关键词的上下文已注入过,30 分钟去重冷却还剩 ${remainMin} 分钟,本次跳过;需要详情可运行 \`exomind entity "${cooled[0]}"\`。`;
   }
   return contextBlock(picked);
 }

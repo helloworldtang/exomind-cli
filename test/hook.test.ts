@@ -66,6 +66,28 @@ describe('hook: matchEntities', () => {
     const hits = matchEntities('a 出现了', ['a', 'Redis']);
     assert.deepEqual(hits, []);
   });
+  test('短 ASCII 候选要求词边界——"es" 不从 "harness" 中间误命中', () => {
+    const hits = matchEntities('帮我看看 harness 相关的知识', ['harness', 'es', 'Redis']);
+    assert.ok(hits.includes('harness'));
+    assert.ok(!hits.includes('es'), '别名 es 不应从 harness 内部子串命中');
+  });
+  test('短 ASCII 候选独立成词时正常命中', () => {
+    const hits = matchEntities('用 es 和 cr 分别查一下', ['es', 'CR']);
+    assert.ok(hits.includes('es'));
+    assert.ok(hits.includes('CR'));
+  });
+  test('"cr" 不从 "Micro" 中间误命中', () => {
+    const hits = matchEntities('Micro 服务拆分', ['CR']);
+    assert.deepEqual(hits, []);
+  });
+  test('长候选保留子串匹配(复数/复合词仍命中)', () => {
+    const hits = matchEntities('处理 images 的裁剪', ['image']);
+    assert.ok(hits.includes('image'));
+  });
+  test('含 CJK 的候选不受词边界影响', () => {
+    const hits = matchEntities('看看知识飞轮的用法', ['知识飞轮']);
+    assert.ok(hits.includes('知识飞轮'));
+  });
 });
 
 describe('hook: hasTechTerm', () => {
