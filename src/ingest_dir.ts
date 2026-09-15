@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import type { ApiClient } from './api';
 import { opTimeout, ApiError } from './api';
 import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, type Manifest } from './manifest';
+import { invalidateKeywordCache } from './config';
 import { readFileText } from './io';
 import { output, green, red, dim } from './format';
 
@@ -140,7 +141,9 @@ export async function ingestWithRetry(
   let transientAttempts = 0;
   while (true) {
     try {
-      return await client.post(url, payload, { timeoutMs });
+      const res = await client.post(url, payload, { timeoutMs });
+      invalidateKeywordCache(); // 摄入成功 → hook 的关键词缓存失效,新实体/别名立即可匹配(单条/--fast/--dir 共用此路径)
+      return res;
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
       if (e.status === 429) {

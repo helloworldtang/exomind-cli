@@ -57,6 +57,16 @@ export interface ConfigOverrides {
   apiKey?: string;
 }
 
+/** 摄入成功后失效本地关键词表缓存——新实体/别名立即可被 hook 匹配,
+ * 否则 hook 最长滞后 1 小时(CACHE_TTL)才看到新知识。无缓存时静默无事。 */
+export function invalidateKeywordCache(): void {
+  try {
+    fs.unlinkSync(CACHE_KEYWORDS);
+  } catch {
+    /* 缓存不存在或删除失败均无需处理(下次 hook 按 miss 重建) */
+  }
+}
+
 export function resolveConfig(overrides?: ConfigOverrides): Config {
   const base = loadConfig();
   return {

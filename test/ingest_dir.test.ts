@@ -1,3 +1,4 @@
+import './_setup_cache';
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -104,6 +105,15 @@ describe('ingest_dir', () => {
     const r = await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
     assert.equal(r.entities, 1);
     assert.equal(calls, 2);
+  });
+
+  test('ingestWithRetry: 成功后失效 hook 关键词缓存(新实体立即可匹配)', async () => {
+    const { CACHE_KEYWORDS } = await import('../src/config');
+    fs.mkdirSync(path.dirname(CACHE_KEYWORDS), { recursive: true });
+    fs.writeFileSync(CACHE_KEYWORDS, '{"names":["旧实体"],"aliases":[]}');
+    const fakeClient = { post: async () => ({ entities: 1, concepts: 0 }) };
+    await id.ingestWithRetry(fakeClient as any, { content: 'x' }, 1000);
+    assert.equal(fs.existsSync(CACHE_KEYWORDS), false, '摄入成功应删除本地关键词缓存');
   });
 
   test('ingestWithRetry: 无 type 的 429(中间件频率窗/nginx)也退避重试', async () => {
