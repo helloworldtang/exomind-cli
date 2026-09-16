@@ -17,6 +17,8 @@ exomind login               # 粘贴 youhuale.cn/ui/account 的 API Key
 exomind me                  # 验证登录
 ```
 
+> **短命令**:`emcli` 是同一入口的别名(`exomind` 太长时的省敲方案),`emcli query "..."` 等价于 `exomind query "..."`,help/usage 会跟随实际调用名。两个名字同时可用;文档示例一律写 `exomind`。
+
 > 前置:Node.js 18+(`node -v`)。CI 等场景可改用环境变量 `EXOMIND_API_KEY` / `EXOMIND_BASE_URL`,免登录。
 
 ## 快速开始

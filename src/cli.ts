@@ -82,8 +82,11 @@ function run<T = AnyOpts>(fn: (client: ApiClient, opts: T, args: string[]) => Pr
 
 const program = new Command();
 
+// bin 双名(exomind/emcli 同一入口): help/usage 跟随实际调用名,其余场合一律 exomind
+const binName = (process.argv[1] ?? '').endsWith('/emcli') ? 'emcli' : 'exomind';
+
 program
-  .name('exomind')
+  .name(binName)
   .description('ExoMind 跨平台知识飞轮客户端 — 通过 REST 交互(替代 Windows MCP 客户端)。')
   .version(VERSION)
   .option('--json', '输出原始 JSON(机器可读)')
