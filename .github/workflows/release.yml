@@ -12,7 +12,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # publish 成功后自动建 GitHub Release
       id-token: write # npm provenance(供应链溯源)
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +26,10 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # 发版成功的可见信号:自动建 Release(Releases 页有条目 + published 通知邮件)。
+      # 根因档案: v0.17.0 发布成功但 Actions 成功默认不发邮件、npm 也不发,
+      # Releases 页又长期为空(工作流只 publish 不建 Release)→ 「发了但看不见」。
+      # --verify-tag 防笔误;--generate-notes 自动生成版本 diff 备注。
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

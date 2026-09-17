@@ -1,6 +1,6 @@
 # 发版流程（发布到 npm）
 
-> 一句话：把 `v*` tag 推到 GitHub，Release 工作流自动构建并发布到 npm。
+> 一句话：把 `v*` tag 推到 GitHub，Release 工作流自动构建并发布到 npm，**并自动创建 GitHub Release**（Releases 页有条目 + published 通知邮件——Actions 成功默认不发邮件、npm 也不发，Release 是唯一的成功可见信号，v0.17.0 曾因此被误判未发布）。
 > **本机不需要登录 npm** —— 发布凭据是仓库 secret `NPM_TOKEN`，在 GitHub 的机器上使用。
 
 ## 原理
@@ -22,10 +22,10 @@
    ```bash
    git push --follow-tags
    ```
-4. **等流水线**：GitHub → Actions →「Release」run 变绿（通常 1 分钟内）。
-5. **验证**：
+4. **等流水线**：GitHub → Actions →「Release」run 变绿（通常 1 分钟内），绿了 Releases 页会自动出现该版本条目。
+5. **验证**（用具体版本号查，绕开 `latest` 的 CDN 缓存；注册表传播有约 3 分钟延迟，刚发布查不到不算失败）：
    ```bash
-   npm view exomind version   # 应输出新版本号
+   npm view exomind@<版本号> version   # 应输出该版本号
    ```
 
 > `npm version` 支持自定义提交信息：`npm version patch -m "release: v%s — <本版说明>"`。
