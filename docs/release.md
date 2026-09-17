@@ -58,5 +58,6 @@ gh secret set NPM_TOKEN --repo helloworldtang/exomind-cli
 | v0.15.0 | 2026-09-15 | 同上 | 成功（首推网络超时，重试成功） |
 | v0.16.0 | 2026-09-15 | 同上 | 成功（GitHub 首推超时一次，用户开 VPN 后重推成功） |
 | v0.17.0 | 2026-09-17 | 同上 | 成功 |
+| v0.17.1 | 2026-09-17 | 同上 | 成功（注册表传播延迟约 3 分钟，publish 日志实锤 `+ exomind@0.17.1`；GitHub Release 本版起补建） |
 
 （更早的 v0.6–v0.12 亦为相同方式。）
