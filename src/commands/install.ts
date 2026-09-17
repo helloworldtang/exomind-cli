@@ -259,18 +259,18 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
       hooks?: Array<{ type?: string; command?: string }>;
     }>;
 
-    // 幂等: 移除已存在的 exomind hook,保留其它工具的 hook
+    // 幂等: 移除已存在的 exomind/emcli hook(双名同入口,两种写法都算自家),保留其它工具的 hook
     const kept = list.filter(
-      (m) => !(m.hooks || []).some((h) => String(h.command || '').includes('exomind')),
+      (m) => !(m.hooks || []).some((h) => /(?:exomind|emcli) hook/.test(String(h.command || ''))),
     );
     kept.push({
-      hooks: [{ type: 'command', command: 'exomind hook', statusMessage: 'ExoMind 知识飞轮检索' }],
+      hooks: [{ type: 'command', command: 'emcli hook', statusMessage: 'ExoMind 知识飞轮检索' }],
     });
     hooks.UserPromptSubmit = kept;
     settings.hooks = hooks;
 
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-    console.log(ok('已配置 UserPromptSubmit hook → exomind hook (Claude Code 独有)'));
+    console.log(ok('已配置 UserPromptSubmit hook → emcli hook (Claude Code 独有)'));
     console.log(dim('  Codex 当前无对应 prompt-submit hook,靠 skill 触发(jdit/存档/查询)。'));
   }
 

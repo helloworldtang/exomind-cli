@@ -61,7 +61,7 @@ export default async function doctor(client: ApiClient): Promise<void> {
   checks.push({
     host: 'claude',
     skill: fileExists(claudeSkill) ? 'ok' : 'missing',
-    hook: /exomind/.test(readText(claudeSettings)) ? 'ok' : 'missing',
+    hook: /(?:exomind|emcli) hook/.test(readText(claudeSettings)) ? 'ok' : 'missing',
     mcpConfig: mcpServersExomind(claudeJson, 'mcpServers') ? 'ok' : 'missing',
     paths: [claudeSkill, claudeSettings, claudeJson],
   });
@@ -125,5 +125,5 @@ export default async function doctor(client: ApiClient): Promise<void> {
     `  auth:        ${authed ? ok('✓ 已登录') : yellow('✗ 未登录/异常')}${authErr ? dim(' ' + authErr) : ''}`,
   );
   console.log(`  mcp init:    ${mcpInit.ok ? ok('✓ ' + mcpInit.detail) : yellow('✗ ' + mcpInit.detail)}`);
-  console.log(dim('\n  缺项用 `exomind install [--host <claude|codex|opencode>]` 补齐;改完重启对应 Agent。'));
+  console.log(dim('\n  缺项用 `emcli install [--host <claude|codex|opencode>]` 补齐;改完重启对应 Agent。'));
 }
