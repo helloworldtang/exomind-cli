@@ -89,7 +89,7 @@ function collectExamples(): Array<{ file: string; line: number; raw: string }> {
         }
         if (!inFence && !stripped.startsWith('|')) return;
         if (DIAGRAM_CHARS.test(line)) return; // 架构图，不是命令
-        const m = /^\s*(?:\$\s*)?\|?\s*`?\s*(exomind\s+\S.*)$/.exec(line);
+        const m = /^\s*(?:\$\s*)?\|?\s*`?\s*((?:exomind|emcli)\s+\S.*)$/.exec(line);
         if (!m) return;
         const raw = m[1]
           .replace(/[|`]+$/, '')
@@ -130,7 +130,7 @@ describe('文档里的命令示例', () => {
 
     for (const { file, line, raw } of collectExamples()) {
       const tokens = tokenize(raw);
-      if (tokens[0] !== 'exomind' || tokens.length < 2) continue;
+      if (!['exomind', 'emcli'].includes(tokens[0]) || tokens.length < 2) continue;
       if (tokens[1].startsWith('-')) continue; // 如 `exomind --help`
 
       if (!surface.subcommands.has(tokens[1])) {

@@ -7,17 +7,17 @@
 - **跨平台**:纯 Node,Windows PowerShell / macOS / Linux 行为完全一致,无需 Git Bash / Python / curl。
 - **零运行时依赖**:`commander` / `picocolors` 由 tsup 打进单文件,基于 Node 18+ 全局 `fetch`。
 - **服务器零改动**:命令与服务端 REST 端点 1:1,认证走 `Authorization: Bearer`。
-- **自带飞轮**:`exomind hook` 子命令跨平台复刻旧 bash hook(存档暗号 / 经验·调研自动摄入 / 关键词上下文注入)。
+- **自带飞轮**:`emcli hook` 子命令跨平台复刻旧 bash hook(存档暗号 / 经验·调研自动摄入 / 关键词上下文注入)。
 
 ## 安装
 
 ```bash
 npm install -g exomind
-exomind login               # 粘贴 youhuale.cn/ui/account 的 API Key
-exomind me                  # 验证登录
+emcli login               # 粘贴 youhuale.cn/ui/account 的 API Key
+emcli me                  # 验证登录
 ```
 
-> **短命令**:`emcli` 与 `exomind` 是同一 CLI 的两个命令名(bin 双名同入口),`emcli query "..."` 即 `exomind query "..."`,help/usage 跟随实际调用名。本 README 示例统一用 `exomind`。
+> **命令名**:npm 包名是 `exomind`,装出的 CLI 有两个等价命令名(bin 双名同入口):本 README 示例统一用 `emcli`,敲 `exomind` 完全等价。
 
 > 前置:Node.js 18+(`node -v`)。CI 等场景可改用环境变量 `EXOMIND_API_KEY` / `EXOMIND_BASE_URL`,免登录。
 
@@ -25,55 +25,55 @@ exomind me                  # 验证登录
 
 ```bash
 # 导入知识(参数 / stdin / 文件)
-exomind ingest "Redis 持久化:RDB 快照 + AOF 日志,混合模式推荐" -t "Redis 持久化" --tag redis
-echo "管道内容" | exomind ingest -t "标题"
-exomind ingest --file ./notes.md -t "标题"
-exomind ingest --dir ./notes --recursive      # 目录批量(增量: SHA-256 跳过未变文件)
+emcli ingest "Redis 持久化:RDB 快照 + AOF 日志,混合模式推荐" -t "Redis 持久化" --tag redis
+echo "管道内容" | emcli ingest -t "标题"
+emcli ingest --file ./notes.md -t "标题"
+emcli ingest --dir ./notes --recursive      # 目录批量(增量: SHA-256 跳过未变文件)
 
 # 查询与搜索
-exomind query "Redis RDB 和 AOF 的区别?"
-exomind search "Redis 持久化" --rerank
-exomind entity "Redis"          # 实体详情 + 关系
-exomind stats                   # 知识飞轮统计
+emcli query "Redis RDB 和 AOF 的区别?"
+emcli search "Redis 持久化" --rerank
+emcli entity "Redis"          # 实体详情 + 关系
+emcli stats                   # 知识飞轮统计
 
 # 飞轮
-exomind review                  # FSRS-5 间隔复习
-exomind gaps                    # 知识缺口(驱动摄入)
-exomind feedback "entities/Redis.md" positive
+emcli review                  # FSRS-5 间隔复习
+emcli gaps                    # 知识缺口(驱动摄入)
+emcli feedback "entities/Redis.md" positive
 ```
 
-加 `--json` 获取机器可读输出(脚本/管道):`exomind --json stats | jq .total_nodes`。
+加 `--json` 获取机器可读输出(脚本/管道):`emcli --json stats | jq .total_nodes`。
 
 ## 凭证管理
 
-`exomind login` 输入的凭证持久化到本地,后续命令自动读取,无需重复登录。
+`emcli login` 输入的凭证持久化到本地,后续命令自动读取,无需重复登录。
 
 - **存储位置**:`~/.exomind/config.json`(明文 JSON),文件权限 `0600`(仅所有者可读写;Windows 无 POSIX 权限则忽略)。
 - **凭证类型**:服务端 `auth_middleware` 同时接受 **API Key**(从 `youhuale.cn/ui/account` 复制)与 **GitHub token**(`gh_` 前缀);两者统一以 `Authorization: Bearer` 发送,CLI 不关心是哪种。
 - **读取优先级**:`config.json` 的 `api_key` → 环境变量 `EXOMIND_API_KEY` → 旧版遗留文件 `~/.claude/scripts/.exomind-api-key`(向后兼容老安装)。三者任一存在即免登录。
 - **CI / 免登录**:只设环境变量 `EXOMIND_API_KEY`(可选 `EXOMIND_BASE_URL`)即可,完全不写本地文件。`config.json` 优先级高于环境变量,故已 `login` 的机器需 `--api-key` 才能临时覆盖。
-- **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `exomind me` 复核。
-- **换号 / 登出**:重新 `exomind login` 覆盖旧凭证;彻底登出删 `~/.exomind/config.json`。
+- **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `emcli me` 复核。
+- **换号 / 登出**:重新 `emcli login` 覆盖旧凭证;彻底登出删 `~/.exomind/config.json`。
 - **安全提醒**:文件是**明文**,任何能读你 home 目录的进程都能拿到 key。共享机器 / 不信任环境请用环境变量,不要用 `login`。
 
-> 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `exomind login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `exomind login` 的 prompt 读取不走 shell 历史。
+> 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `emcli login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `emcli login` 的 prompt 读取不走 shell 历史。
 
 ## 接入 Claude Code / Codex(一条命令,默认全装)
 
 ```bash
-exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),全部自动(幂等+备份)
-# 只装某个宿主: exomind install --host codex   (claude | codex | opencode)
+emcli install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),全部自动(幂等+备份)
+# 只装某个宿主: emcli install --host codex   (claude | codex | opencode)
 # 跳过某项: --no-skill / --no-hook / --no-mcp
 ```
 
-**Codex**(skill + MCP,无 hook):装到 `$CODEX_HOME/skills/exomind/`(缺省 `~/.codex/`),MCP 写入 `$CODEX_HOME/config.toml`。**Codex 没有 Claude 的 UserPromptSubmit hook**,靠 skill 的触发词(jdit/存档/查询)驱动;MCP `ingest` 只收文本,目录导入走 `exomind ingest --dir`。装完**重启 Codex**,skill 列表应出现 `exomind`。
+**Codex**(skill + MCP,无 hook):装到 `$CODEX_HOME/skills/exomind/`(缺省 `~/.codex/`),MCP 写入 `$CODEX_HOME/config.toml`。**Codex 没有 Claude 的 UserPromptSubmit hook**,靠 skill 的触发词(jdit/存档/查询)驱动;MCP `ingest` 只收文本,目录导入走 `emcli ingest --dir`。装完**重启 Codex**,skill 列表应出现 `exomind`。
 
-排查各宿主装没装上:`exomind doctor`(或 `exomind --json doctor`)。
+排查各宿主装没装上:`emcli doctor`(或 `emcli --json doctor`)。
 
 一行完成三层,免手改任何 JSON:
 - **① MCP 工具**(能力):写 `~/.claude.json` 的 `mcpServers.exomind` → Agent 拿到 `mcp__exomind__*` 确定性工具。
 - **② skill**(指导):拷到 `~/.claude/skills/exomind/`。
-- **③ hook**(闸门):写 `settings.json` 的 `UserPromptSubmit → exomind hook`。
+- **③ hook**(闸门):写 `settings.json` 的 `UserPromptSubmit → emcli hook`。
 
 重启 Claude Code 后:
 - 说 **`存档`** / **`jdit`** → 自动回顾会话、摄入。
@@ -82,18 +82,18 @@ exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主)
 
 完整接入步骤见服务端仓库 `myExoMindManager/docs/new-machine-setup.md`。
 
-**升级**:`npm i -g exomind@latest && exomind install`(幂等,刷新 skill/hook/mcp;`~/.exomind/` 的 config 与 manifest 保留)。注意:`npm i -g` 只换二进制(CLI+MCP 自动用新),**skill 是拷贝的,需 `exomind install` 才刷新**。
+**升级**:`npm i -g exomind@latest && emcli install`(幂等,刷新 skill/hook/mcp;`~/.exomind/` 的 config 与 manifest 保留)。注意:`npm i -g` 只换二进制(CLI+MCP 自动用新),**skill 是拷贝的,需 `emcli install` 才刷新**。
 
 ## 关于 MCP 工具层(Claude Code / OpenCode / Codex 都已默认装)
 
-`exomind install` 一次写**三个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
+`emcli install` 一次写**三个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
 - **Claude Code**:`~/.claude.json` → `mcpServers.exomind`
 - **OpenCode**:`~/.config/opencode/opencode.json` → `mcp.exomind`
 - **Codex**:`$CODEX_HOME/config.toml` → `[mcp_servers.exomind]`
 
-只关 MCP:`exomind install --no-mcp`(三个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
+只关 MCP:`emcli install --no-mcp`(三个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
 
-`exomind mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
+`emcli mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
 
 ## 命令一览
 
@@ -119,11 +119,11 @@ exomind install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主)
 ```
 Claude Code skill「exomind」(教 Agent 用 CLI)
         │
-  UserPromptSubmit hook → exomind hook (跨平台,无 bash/python)
-   - 存档/jdit 暗号、经验/调研自动检测 → 提示 exomind ingest
+  UserPromptSubmit hook → emcli hook (跨平台,无 bash/python)
+   - 存档/jdit 暗号、经验/调研自动检测 → 提示 emcli ingest
    - /keywords + /entities 本地缓存 → 上下文注入(弱服务器友好)
         │
-  exomind CLI  ──HTTPS REST (Bearer)──▶  ExoMind 服务器
+  emcli CLI  ──HTTPS REST (Bearer)──▶  ExoMind 服务器
       /ingest /query /search /entities …
 ```
 
@@ -175,7 +175,7 @@ git push --follow-tags     # 推 tag → 触发 CI → npm publish(带 provenanc
 ## 设计要点
 
 - **CJS 输出**:tsup `format: cjs`,规避 ESM 打包 CJS 依赖时的 `Dynamic require of "events"`;bin 顶部带 shebang。
-- **凭证类型无关**:`exomind login` 存入的字符串以 `Bearer` 发送,服务器 `auth_middleware` 同时接受 API Key 与 GitHub token(`gh_`)。
+- **凭证类型无关**:`emcli login` 存入的字符串以 `Bearer` 发送,服务器 `auth_middleware` 同时接受 API Key 与 GitHub token(`gh_`)。
 - **hook 弱服务器友好**:`/keywords` 本地缓存 1h,实体描述按 miss 拉取并缓存,per-prompt 命中缓存即零服务器命中。
 
 ## License
