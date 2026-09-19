@@ -15,10 +15,10 @@ jobs:
       contents: write # publish 成功后自动建 GitHub Release
       id-token: write # npm provenance(供应链溯源)
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
       - run: npm ci
