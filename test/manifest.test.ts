@@ -37,15 +37,29 @@ describe('manifest', () => {
     assert.deepEqual(m.loadManifest(), {});
   });
 
-  test('cleanupStale 只清指定目录的失效记录,不碰其它目录', () => {
-    const man = {
-      '/data/dir/a.md': { hash: '1', ingested_at: '', title: 'A', size: 1 },
-      '/data/dir/b.md': { hash: '2', ingested_at: '', title: 'B', size: 1 },
-      '/other/c.md': { hash: '3', ingested_at: '', title: 'C', size: 1 },
+  test('cleanupStale 只清「文件已不存在」的记录,不碰其它目录与仍在文件', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'exomind-clean-'));
+    const dir = path.join(root, 'dir');
+    fs.mkdirSync(dir, { recursive: true });
+    const keepA = path.join(dir, 'a.md'); // 仍在 + 本批覆盖
+    const keepB = path.join(dir, 'b.md'); // 仍在 + 本批未覆盖（回归：不再被误删）
+    const goneC = path.join(dir, 'c.md'); // 已删除 → 应清
+    const otherD = path.join(root, 'd.md'); // 其它目录 → 不动
+    fs.writeFileSync(keepA, 'a');
+    fs.writeFileSync(keepB, 'b');
+    fs.writeFileSync(otherD, 'd');
+    const rec = (h: string) => ({ hash: h, ingested_at: '', title: h, size: 1 });
+    const man: Record<string, { hash: string; ingested_at: string; title: string; size: number }> = {
+      [keepA]: rec('1'),
+      [keepB]: rec('2'),
+      [goneC]: rec('3'),
+      [otherD]: rec('4'),
     };
-    m.cleanupStale(man, '/data/dir', ['/data/dir/a.md']);
-    assert.ok('/data/dir/a.md' in man);
-    assert.ok(!('/data/dir/b.md' in man)); // b 已删 → 清掉
-    assert.ok('/other/c.md' in man); // 其它目录不动
+    m.cleanupStale(man, dir);
+    assert.ok(keepA in man);
+    assert.ok(keepB in man); // 文件仍在 → 即使不在本批名单也不清（修复点）
+    assert.ok(!(goneC in man)); // 文件已不存在 → 清掉
+    assert.ok(otherD in man); // 其它目录不动
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });

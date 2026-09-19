@@ -50,12 +50,13 @@ export function recordFile(manifest: Manifest, absPath: string, rawContent: stri
   };
 }
 
-/** 清理指定目录下已不存在的文件记录(只清该目录,不碰其它目录)。 */
-export function cleanupStale(m: Manifest, dir: string, currentFiles: string[]): void {
+/** 清理指定目录下已不存在的文件记录(只清该目录,不碰其它目录)。
+ *  只按「文件是否仍存在」判断,与本次运行的 --pattern 无关——避免窄 pattern
+ *  分批摄入时误删未被本批覆盖、但文件仍在的记录(2026-09-19 修复)。 */
+export function cleanupStale(m: Manifest, dir: string): void {
   const prefix = path.resolve(dir) + path.sep;
-  const current = new Set(currentFiles);
   for (const key of Object.keys(m)) {
-    if (key.startsWith(prefix) && !current.has(key)) {
+    if (key.startsWith(prefix) && !fs.existsSync(key)) {
       delete m[key];
     }
   }

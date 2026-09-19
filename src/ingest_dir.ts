@@ -340,7 +340,7 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
         await sleep(2000);
       }
     }
-    cleanupStale(manifest, dir, files);
+    cleanupStale(manifest, dir);
     saveManifest(manifest);
   } finally {
     process.removeListener('SIGINT', onSigInt);
