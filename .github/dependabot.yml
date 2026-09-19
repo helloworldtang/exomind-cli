@@ -1,0 +1,8 @@
+# Dependabot: 每月检查 GitHub Actions 版本更新,自动提 PR(先过 CI,绿了再合)。
+# 动机: 防止 action 版本长期停留——v4 一直未升,2026-09 才被发现已到 v7。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
