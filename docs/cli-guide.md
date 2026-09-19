@@ -35,6 +35,7 @@ exomind install          # 装 skill + hook + MCP（默认全装，无 --with-ho
 
 ```bash
 exomind ingest "内容文本" -t "描述性标题" --tag cli --tag exomind
+exomind archive "内容文本" -t "标题"      # archive = ingest 别名("存档"直达)
 echo "管道内容" | exomind ingest -t "标题"
 exomind ingest --file ./notes.md -t "标题"
 ```

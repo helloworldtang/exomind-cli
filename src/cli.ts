@@ -112,9 +112,13 @@ program
   .action(run(whoami));
 
 // ── 写入 ──
+// archive = ingest 别名: 外部 Agent(workbuddy/qclaw 等)收到"存档"指令时第一反应是
+// archive,别名让它们直达,不走"猜错→报错→推理改口"的弯路(与 bin 双名 emcli 同一
+// 哲学: 词汇跟随调用方)。
 program
   .command('ingest [content...]')
-  .description('导入知识: 参数文本 / --file / stdin / --dir 目录批量(增量)')
+  .alias('archive')
+  .description('导入/存档知识: 参数文本 / --file / stdin / --dir 目录批量(增量)')
   .option('-t, --title <title>', '标题(单文件模式)')
   .option('--tag <tag>', '标签(可重复)', collect, [])
   .option('--file <path>', '从文件读取内容')
