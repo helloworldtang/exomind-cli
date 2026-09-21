@@ -91,6 +91,8 @@ exomind draft wechat <id> --account <号>     # 投递公众号草稿箱(真发,
 ```
 链路:`topics` 选题 → `draft new` 生成 → `list/show` 审 → `publish` 入库 / `wechat` 发公众号。
 
+**投公众号的参考链接写成「来源名 + 空格 + 明文 URL」一行一条**(例:`- TypeSafe 官方博客 https://typesafe.ai/blog/...`)。公众号正文不支持外部超链接,md 的 `[标题](URL)` 投到草稿箱会被过滤;URL 只写进 sources 元数据也不会进正文。投递前逐条核对 URL 在正文里且可达。
+
 ### Review (FSRS-5)
 ```bash
 exomind review                       # 待复习列表
