@@ -11,6 +11,7 @@ const origLog = console.log;
 afterEach(() => {
   global.fetch = origFetch;
   console.log = origLog;
+  process.exitCode = 0;
 });
 
 const client = () => new ApiClient({ base_url: 'https://x.test', api_key: '***' });
@@ -82,6 +83,86 @@ describe('delete', () => {
     assert.ok(
       urls.some((u) => u.includes('/pages/concepts/') && u.includes(encodeURIComponent('缓存.md'))),
       '应探测到 concepts/缓存.md',
+    );
+  });
+
+  test('多页一次删:每个参数各发一次 DELETE(回归:旧实现 join 成一条畸形路径 → 只删最后一页)', async () => {
+    const dels: string[] = [];
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        dels.push(url);
+        const rel = decodeURIComponent(url.split('/pages/')[1]);
+        return new Response(JSON.stringify({ deleted: true, path: rel, trash_path: `.trash/202609/${rel}` }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ title: 'T' }), { status: 200 });
+    }) as typeof fetch;
+    const done = captureLogs();
+    await deletePage(client(), { yes: true }, ['raw/manual/A.md', 'summaries/B.md', 'entities/订阅消息.md']);
+    assert.equal(dels.length, 3, '3 页应各发一次 DELETE');
+    for (const p of ['raw/manual/A.md', 'summaries/B.md', `entities/${encodeURIComponent('订阅消息.md')}`]) {
+      assert.ok(dels.some((u) => u.includes(p)), `应有 DELETE ${p}`);
+    }
+    assert.ok(!dels.some((u) => u.includes('%20')), 'URL 里不得出现空格(join 拼接的痕迹)');
+    assert.ok(done.lines().join('\n').includes('3 成功'), '多页应给汇总');
+  });
+
+  test('一页失败不阻断其余页,且退出码非 0', async () => {
+    const dels: string[] = [];
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        dels.push(url);
+        if (url.includes('B.md')) {
+          return new Response(JSON.stringify({ detail: '页面不存在: summaries/B.md' }), { status: 404 });
+        }
+        const rel = decodeURIComponent(url.split('/pages/')[1]);
+        return new Response(JSON.stringify({ deleted: true, path: rel, trash_path: `.trash/202609/${rel}` }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ title: 'T' }), { status: 200 });
+    }) as typeof fetch;
+    const done = captureLogs();
+    await deletePage(client(), { yes: true }, ['entities/A.md', 'summaries/B.md', 'entities/C.md']);
+    assert.equal(dels.length, 3, '一页失败也要把其余页试完');
+    const out = done.lines().join('\n');
+    assert.ok(out.includes('已删除: entities/A.md') && out.includes('已删除: entities/C.md'), '其余页照删');
+    assert.ok(out.includes('未删除'), '失败页必须点名');
+    assert.ok(out.includes('1 失败'), '汇总要体现失败数');
+    assert.equal(process.exitCode, 1, '有失败必须退出码非 0(脚本才看得见少删)');
+  });
+
+  test('裸名解析不到只影响该页,其余页照删', async () => {
+    const dels: string[] = [];
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        dels.push(url);
+        const rel = decodeURIComponent(url.split('/pages/')[1]);
+        return new Response(JSON.stringify({ deleted: true, path: rel, trash_path: `.trash/202609/${rel}` }), { status: 200 });
+      }
+      if (url.includes('Z.md')) return new Response(JSON.stringify({ detail: '页面不存在' }), { status: 404 });
+      return new Response(JSON.stringify({ title: 'B' }), { status: 200 });
+    }) as typeof fetch;
+    const done = captureLogs();
+    await deletePage(client(), { yes: true }, ['Z', 'entities/B.md']);
+    assert.equal(dels.length, 1, '只有能定位到的那页发 DELETE');
+    assert.ok(dels[0].includes('/pages/entities/B.md'), '可定位的页照删');
+    assert.ok(done.lines().join('\n').includes('Z 未删除'), '解析失败页要点名');
+    assert.equal(process.exitCode, 1);
+  });
+
+  test('服务端删的不是请求的那页 → 明确告警(服务端有按名兜底,可能删错页)', async () => {
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return new Response(
+          JSON.stringify({ deleted: true, path: 'concepts/Redis.md', trash_path: '.trash/202609/concepts/Redis.md' }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ title: 'Redis' }), { status: 200 });
+    }) as typeof fetch;
+    const done = captureLogs();
+    await deletePage(client(), { yes: true }, ['entities/Redis.md']);
+    assert.ok(
+      done.lines().join('\n').includes('实际删除的是 concepts/Redis.md'),
+      '命中与请求不一致必须告警,不能静默',
     );
   });
 
