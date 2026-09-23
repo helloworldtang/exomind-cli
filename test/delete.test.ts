@@ -204,6 +204,19 @@ describe('trash', () => {
     assert.ok(done.lines().join('\n').includes('已恢复'), '应输出恢复成功');
   });
 
+  test('restore 多目标 → 显式报错(不再静默只恢复第一个)', async () => {
+    let posted = 0;
+    global.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') posted++;
+      return new Response(JSON.stringify({ restored: true, path: 'entities/Redis.md' }), { status: 200 });
+    }) as typeof fetch;
+    await assert.rejects(
+      () => trash(client(), {}, ['restore', '.trash/202609/a.md', '.trash/202609/b.md']),
+      /一次只能恢复一个/,
+    );
+    assert.equal(posted, 0, '报错时不得发恢复请求');
+  });
+
   test('未知子命令 → 报错列可用动作', async () => {
     await assert.rejects(() => trash(client(), {}, ['rename']), /list 列表 \/ restore/);
   });
