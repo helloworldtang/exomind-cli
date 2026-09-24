@@ -15,7 +15,7 @@
 //   node scripts/preflight.mjs                    # 本地 / CI 通用
 //   node scripts/preflight.mjs --skip-registry    # 不联网
 //   node scripts/preflight.mjs --allow-published  # dry run：已发布降级为提示
-//   node scripts/preflight.mjs --tag-prefix=cli-v # tag 前缀（默认 'v'）
+//   node scripts/preflight.mjs --tag-prefix=v    # tag 前缀（默认即 'v'；改前缀的仓库才需要显式传）
 //
 // 环境变量 GITHUB_REF_NAME / GITHUB_EVENT_NAME 由 CI 提供；本地不设则跳过 tag 断言。
 
