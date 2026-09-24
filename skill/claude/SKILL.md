@@ -35,6 +35,7 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 - **最佳实践 / 模式** — 最佳实践, 设计模式
 - **可复用知识** — 概念、方法论、心智模型、经典实践、可复用方案、蒸馏出的经验
 - **会话中讨论出的结论 / 新认知 / 概念 / 洞察** — 推翻旧判断的、纠正误判的、新建立的因果或关联
+- **项目状态** — 进度、已解决的问题、后续工作(跨会话/跨 agent 同步的载体;**--tag 挂项目名**作为检索锚点)
 
 内容骨架(按类型组织,直接决定存档质量与检索命中):
 
@@ -45,6 +46,7 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 | 性能/优化 | 基线 → 改动 → 数字对比 → 适用条件 |
 | 结论/新认知/洞察 | 结论本体 → 依据(会话中如何得出) → 新在哪/推翻了什么 → 适用边界 |
 | 调研 | 识别 → 分析 → 定义 → 解决(保留完整结论与关键数据) |
+| 项目状态 | 项目一句话 → 当前进度(关键 commit/版本) → 本轮已解决(+验证) → 下一步/待办(带优先级) → 接手须知(坑与约束) |
 
 通则:**专有名词用专名并带版本号**(服务端要从正文抽实体节点,泛称抽不出);**标题写成能被检索命中的问句式/症状式**(如「npm pack --json 0 文件怎么回事」),不写泛泛总结式。
 
@@ -55,6 +57,7 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 - 深技术问题(超出通识)→ 先 `exomind query` / `exomind search`,用返回的上下文作答。
 - 「X 和 Y 什么关系?」→ `exomind entity X` / `exomind relations X`。
 - KB 可能比模型记忆更了解当前语境时,先检索——别拿记忆硬答。
+- **接手/继续一个项目** → 先 `exomind search <项目名>` 找最近的项目状态存档(进度/已解决/待办),再动手——上一会话(哪怕另一个 agent)的进度都在里面。
 
 ## 数据位置(勿误报)
 
