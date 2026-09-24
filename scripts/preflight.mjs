@@ -120,7 +120,8 @@ try {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const parsed = JSON.parse(out);
-  const entry = (Array.isArray(parsed) ? parsed : [parsed])[0];
+  // npm ≤11 输出数组 [条目]；npm ≥12 输出 {包名: 条目} 映射
+  const entry = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
   const packed = new Set((entry.files ?? []).map((f) => f.path));
   for (const clean of targets.keys()) {
     if (clean && !packed.has(clean)) problems.push(`tarball 里没有 ${clean}——入口被 files 白名单挡掉了`);
