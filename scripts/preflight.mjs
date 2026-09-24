@@ -25,7 +25,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, '..');
+// 包根 = 从脚本所在目录向上找到的第一个含 package.json 的目录。
+// 本脚本可能躺在包根（tools/cli/preflight.mjs）也可能在子目录（scripts/preflight.mjs），
+// 写死 `HERE/..` 会让其中一种情况读错 package.json。
+const ROOT = (() => {
+  let dir = HERE;
+  for (let i = 0; i < 5; i += 1) {
+    if (existsSync(resolve(dir, 'package.json'))) return dir;
+    dir = resolve(dir, '..');
+  }
+  throw new Error(`从 ${HERE} 向上找不到 package.json`);
+})();
 const args = process.argv.slice(2);
 const arg = (name, fallback) => args.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1) ?? fallback;
 const skipRegistry = args.includes('--skip-registry');

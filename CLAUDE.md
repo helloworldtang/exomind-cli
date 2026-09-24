@@ -15,6 +15,8 @@ npm 发布由 **GitHub Action 在收到 tag 时触发** `npm publish`。**只 pu
   5. `npm version patch`(自动 commit package.json 版本号 + 打 tag `vX.Y.Z`)
   6. `git push origin main --tags` → GA 自动 `npm publish`(`prepublishOnly: npm run build` 会重建 dist/)
 - tag 首次 push 偶发 GitHub 443 超时,重试 `git push origin vX.Y.Z` 即过。
+- **改了发布工作流或 `scripts/preflight.mjs` 后,用 Actions 页面 dispatch「Release」+ `dry_run=true` 试跑**(只构建 + 自检,不发布)。同版本重发必然 403,拿真版本试等于「改坏了也测不出来」;试跑后确认「发布到 npm / 确认版本已在 registry 可见 / 建 GitHub Release」三步为 skipped。
+- 本机可先跑自检:`npm run build && node scripts/preflight.mjs --skip-registry`(补 `--allow-published` 时,已发布版本只提示不报错)。
 - **commit message 不加 Co-Authored-By**(全局规则)。
 
 ## 构建 / 测试 / 本地试用
