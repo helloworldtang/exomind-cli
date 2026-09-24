@@ -5,71 +5,87 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 
 # ExoMind CLI
 
-`exomind` is a cross-platform CLI that talks to your ExoMind knowledge base over REST. It replaces the MCP client (which is unreliable on Windows). After a one-time `exomind login` (paste the API Key from `youhuale.cn/ui/account`), every command works identically on Windows / macOS / Linux.
+`exomind` 是跨平台 CLI,经 REST 连接你的 ExoMind 知识飞轮(替代 Windows 上不稳定的 MCP 客户端)。一次性 `exomind login`(粘贴 `youhuale.cn/ui/account` 的 API Key)后,所有命令在 Windows / macOS / Linux 行为一致。命令报「未登录」→ 先 `exomind login`。
 
-If a command fails with "未登录", run `exomind login` first.
+## 快速决策(要做什么 → 跑哪条)
 
-## ⚠️ 用法铁律(最先读,必守)
+| 场景 | 命令 |
+|---|---|
+| 保存一条知识/经验 | `exomind ingest "内容" -t "描述性标题" --tag 标签` |
+| 导入目录 / 多个文件 | `exomind ingest --dir <路径>`(一条命令搞定,增量) |
+| 深技术问题 / 找过往经验 | `exomind query "问题"`(LLM 问答,引用 KB 页面) |
+| 关键词精确匹配 | `exomind search "关键词"`(BM25 全文) |
+| 实体详情 / 关联关系 | `exomind entity X` / `exomind relations X --depth 2` |
 
-1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`。**用 `--dir` 时不要先 `Read` 文件**——CLI 自己读,预读纯浪费上下文。
+## ⚠️ 用法铁律(必守)
+
+1. **目录 / 多个文件 → 一条 `exomind ingest --dir <路径>`**(增量,自动跳过已摄文件)。**绝不**逐文件调用 Skill 工具、**绝不**逐条 `exomind ingest --file`、**绝不**把多个文件 `cat`/合并成一条 ingest(丢失每篇结构、无法按文件判重、易超 5 万字限)。**用 `--dir` 时不要先 `Read` 文件**——CLI 自己读,预读纯浪费上下文。
 2. **Skill 工具只调用一次**(加载本文件一次即可,后续一律用 Bash 跑 `exomind ...`)。
-3. 单条知识 → `exomind ingest "内容" -t 标题 --tag 标签`。
-4. ingest 是**同步**(每文件 1-3 min);`--dir` 并发(`--concurrency` 默认3)+ `⏳[i/n]` 进度 + 结束汇总(新增/更新/跳过/失败),不是后台异步。
-5. **"全部跳过"= 成功**(文件已在库且内容未变),**绝不**因此擅自加 `--force` 重摄(会白白重跑 N×分钟 LLM)。只有用户**明确**说"强制刷新/全量重处理/忽略缓存"才用 `--force`。
-6. **绝不把多个文件 `cat`/合并成一条 `ingest`**(丢失每篇结构、无法按文件判重、易超 5 万字限)。多个文件就是 `--dir`;单条才是文本 ingest。
+3. ingest 是**同步**的(每文件 1-3 min),会一直占住到完成——不是后台异步,别轮询别杀。
+4. **「全部跳过」= 成功**(文件已在库且内容未变),**绝不**因此擅自加 `--force` 重摄(会白白重跑 N×分钟 LLM)。只有用户**明确**说「强制刷新/全量重处理/忽略缓存」才用 `--force`。
 
-## 数据位置(重要 — 勿误报)
+## 主动摄入(飞轮回路,无需问用户)
 
-**所有知识飞轮数据都在服务器(youhuale.cn),不在本地。** CLI 通过 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅以下状态文件:
+会话中产生以下任一类内容,**立即 `exomind ingest` 存档**(这是复利回路,不要等用户开口):
+
+- **关键收获 / 教训 / 踩坑** — 经验总结, 踩坑记录, 心得
+- **带理由的架构决策** — 架构决策, 技术选型
+- **根因分析 / 调试洞见** — 根因分析, 调试经验
+- **有具体数字的性能结果** — 优化效果, 性能数据, 对比数据
+- **最佳实践 / 模式** — 最佳实践, 设计模式
+- **可复用知识** — 概念、方法论、心智模型、经典实践、可复用方案、蒸馏出的经验
+
+摄入规则:标题用**描述性** `-t`(不要「经验总结」这种泛标题);加相关 `--tag`;**带全上下文**(推理、数字、取舍都别省);一个 coherent 知识单元一条 ingest,多个就跑多条。
+
+## 先查再答(反向回路)
+
+- 深技术问题(超出通识)→ 先 `exomind query` / `exomind search`,用返回的上下文作答。
+- 「X 和 Y 什么关系?」→ `exomind entity X` / `exomind relations X`。
+- KB 可能比模型记忆更了解当前语境时,先检索——别拿记忆硬答。
+
+## 数据位置(勿误报)
+
+**所有知识飞轮数据都在服务器(youhuale.cn),不在本地。** CLI 经 REST 上传/查询,**绝不写本地 wiki 目录**(不存在 `~/my-wiki` 之类)。本地仅三个状态文件:
+
 - `~/.exomind/config.json` — 凭证
-- `~/.exomind/cache/` — hook 的关键词/实体缓存(从服务器拉的副本)
+- `~/.exomind/cache/` — hook 的关键词/实体缓存(服务器副本)
 - `~/.exomind/manifest.json` — 目录增量摄入的内容哈希清单(去重用,非知识飞轮本身)
 
-摄入成功后输出 `✓ 已导入服务器知识飞轮`。若要确认数据落地,用 `exomind search <关键词>` 复查。**不要向用户报告"已保存到 ~/my-wiki/entities/X.md"等本地路径——那是错的。**
+摄入成功输出 `✓ 已导入服务器知识飞轮`。要确认数据落地用 `exomind search <关键词>` 复查。**绝不向用户报告「已保存到 ~/my-wiki/entities/X.md」等本地路径——那是错的。**
 
-## 性能注意(ingest / query / synthesize 较慢)
-
-这三个命令在服务器端走多次 LLM 调用(抽取实体/关系、生成摘要),弱服务器上**长内容 1-3 分钟属正常**,CLI 会在 stderr 打 `⏳` 进度提示。
-- 默认超时:ingest/synthesize 5 分钟、query 3 分钟。需更长:设 `EXOMIND_TIMEOUT_MS=600000`。
-- **不要用 `timeout` 命令包裹**(macOS 默认无该命令;且 CLI 自己会等)。
-- 超长文本(>5 万字符)会被拒;拆成多条 ingest。
-
-## 批量目录摄入(增量,推荐)
-
-**本 skill 只加载一次。** 同步一个目录的多个文件,用 `--dir` 一条命令搞定——**不要**逐文件调用 Skill 或逐条 Bash:
+## 批量目录摄入与性能
 
 ```bash
 exomind ingest --dir ~/workspace/notes --recursive        # 增量:只摄新增/改动
-exomind ingest --dir ~/workspace/notes --concurrency 5    # 并发(默认3,大服务器可调高加速)
-exomind ingest --dir ~/workspace/notes --force            # 强制全量重摄
+exomind ingest --dir ~/workspace/notes --concurrency 5    # 并发(默认3,可调高加速)
+exomind ingest --dir ~/workspace/notes --force            # 强制全量重摄(见铁律4)
 exomind ingest --dir ~/workspace/notes --pattern "*.md"   # 默认就是 *.md
 ```
 
-- **增量去重**:按文件内容 SHA-256 记在 `~/.exomind/manifest.json`,**未变的文件直接跳过**(不调 LLM),所以隔几天重跑同目录很便宜——只处理新/改文件。
-- **并发 + 进度**:每文件 1-3 分钟,`--dir` 按 `--concurrency`(默认3)并发处理、stderr 打 `⏳ [i/n]`;ingest 是**同步**(不是后台异步),会一直占住到完成。
-- 结束汇总:`新增 N / 更新 M / 跳过 K / 失败 J`。
+- **增量去重**:按文件内容 SHA-256 记在 `~/.exomind/manifest.json`,未变文件直接跳过(不调 LLM),隔几天重跑同目录很便宜。
+- **进度与汇总**:按 `--concurrency` 并发,stderr 打 `⏳ [i/n]`,结束汇总 `新增 N / 更新 M / 跳过 K / 失败 J`。
+- **超时**:ingest/synthesize 默认 5 分钟、query 3 分钟;要更长设 `EXOMIND_TIMEOUT_MS=600000`。**不要用 `timeout` 命令包裹**(macOS 默认无该命令,CLI 自己会等)。超长文本(>5 万字符)会被拒,拆成多条。
 
-## Commands
+## 命令参考
 
-### Login & status
+### 登录态
 ```bash
 exomind login                 # 配置服务器 + 粘贴 API Key(交互式)
-exomind me                    # 显示当前登录态/服务器/凭证
-exomind whoami                # 同上
+exomind me                    # 当前登录态/服务器/凭证(whoami 同义)
 ```
 
-### Save knowledge
+### 保存
 ```bash
 exomind ingest "内容文本" -t "描述性标题" --tag cli --tag exomind
 echo "管道内容" | exomind ingest -t "标题"
 exomind ingest --file ./notes.md -t "标题"
 ```
 
-### Retrieve
+### 检索
 ```bash
 exomind query "如何做 X?"            # LLM 问答,引用 KB 页面
 exomind search "关键词"              # BM25 全文(精确关键词匹配)
-exomind search "关键词" --hybrid     # +向量语义:同义/跨语言/概念关联、字面搜不到时(如「层归一化」→Layer Normalization、「反向传播」→梯度下降)
+exomind search "关键词" --hybrid     # +向量语义:同义/跨语言/概念关联、字面搜不到时(如「层归一化」→Layer Normalization)
 exomind search "关键词" --rerank     # +LLM 精排(最高准、慢;候选不多时)
 exomind entity "Redis"               # 实体详情 + 关系
 exomind relations "Redis" --depth 2  # 关联实体
@@ -80,10 +96,10 @@ exomind daily                        # 每日摘要
 exomind synthesize "主题" --depth 2  # 主题综合报告
 ```
 
-### Draft (构思 → 草稿 → 发布)
+### 写作(构思 → 草稿 → 发布)
 ```bash
 exomind topics                              # 选题推荐(基于图谱密度)
-exomind draft new "选题" [--account <号>]    # 生成草稿 + 保存(LLM,1-3min;替代 gen_article.py)
+exomind draft new "选题" [--account <号>]    # 生成草稿 + 保存(LLM,1-3min)
 exomind draft list [--status <状态>]         # 草稿列表
 exomind draft show <id>                      # 看正文
 exomind draft publish <id>                   # 发布到知识飞轮(入库,走 ingest)
@@ -93,39 +109,12 @@ exomind draft wechat <id> --account <号>     # 投递公众号草稿箱(真发,
 
 **投公众号的参考链接写成「来源名 + 空格 + 明文 URL」一行一条**(例:`- TypeSafe 官方博客 https://typesafe.ai/blog/...`)。公众号正文不支持外部超链接,md 的 `[标题](URL)` 投到草稿箱会被过滤;URL 只写进 sources 元数据也不会进正文。投递前逐条核对 URL 在正文里且可达。
 
-### Review (FSRS-5)
+### 复习(FSRS-5)与反馈
 ```bash
 exomind review                       # 待复习列表
 exomind review mark "Redis" -r 3     # 1=忘记 2=吃力 3=顺利 4=轻松
+exomind feedback "entities/Redis.md" positive   # 驱动质量排序
 ```
 
-### Feedback (drives quality ranking)
-```bash
-exomind feedback "entities/Redis.md" positive
-```
-
-### Output mode
-Default is human-readable (colored). Add `--json` to any command for machine-readable output when piping.
-
-## Knowledge flywheel — proactively ingest (no need to ask)
-
-When the session produces any of the following, **immediately run `exomind ingest`** to persist it (this is the compounding flywheel — do not wait for the user to ask):
-
-- **Key takeaways / lessons / pitfalls** — 经验总结, 踩坑记录, 心得
-- **Architectural decisions with rationale** — 架构决策, 技术选型
-- **Root-cause / debugging insights** — 根因分析, 调试经验
-- **Performance results with concrete numbers** — 优化效果, 性能数据, 对比数据
-- **Best practices / patterns** — 最佳实践, 设计模式
-- **Reusable knowledge — concepts, methodology, mental models, classic practices, reusable solutions, distilled experience** — 可复用的方案、概念、方法论、认知、经验、经典实践
-
-Rules for ingesting:
-- Use a **descriptive title** (`-t`), not a generic one like "经验总结".
-- Add relevant **tags** (`--tag`).
-- Include the **full context** — don't omit reasoning, numbers, or trade-offs.
-- One `ingest` per coherent unit of knowledge; for multiple, run several.
-
-## When to query/search before answering
-
-- A **deep technical question** that needs more than general knowledge → run `exomind query` or `exomind search` first, then answer using the returned context.
-- "What's the relationship between X and Y?" → `exomind entity X` / `exomind relations X`.
-- When relevant KB content would improve the answer, retrieve it; don't answer from memory if the KB may know better.
+### 输出模式
+默认人类可读(彩色)。管道处理时任意命令可加 `--json` 取机器可读输出。
