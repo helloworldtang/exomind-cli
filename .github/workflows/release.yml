@@ -30,6 +30,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
+      # trusted publishing 需 npm ≥ 11.5.1(Node 24 自带的小版本不保证),升级一步兜底
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
       # 上传前把「发了才发现」的问题挡住：tag↔版本一致、bin 有效
@@ -37,11 +39,11 @@ jobs:
       # 必须在 build 之后——bin 指向的是 dist/ 构建产物。
       - name: 发布前置自检
         run: node scripts/preflight.mjs ${{ inputs.dry_run && '--allow-published' || '' }}
+      # 认证走 trusted publishing(OIDC):npm 侧已登记本仓库+release.yml,
+      # job 的 id-token:write 权限领短期凭证,无长期 token、无过期问题。
       - name: 发布到 npm
         if: ${{ !inputs.dry_run }}
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # 「发成功了但拉不到」必须知道——所以不靠 npm publish 的退出码，去 registry 复核。
       - name: 确认版本已在 registry 可见
         if: ${{ github.event_name == 'push' && !inputs.dry_run }}
