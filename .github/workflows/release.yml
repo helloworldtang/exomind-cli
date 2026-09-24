@@ -2,11 +2,20 @@ name: Release
 
 # 推 v* tag → 自动构建 + 发布到 npm。
 # 用法: npm version patch && git push --follow-tags
+#
+# 安全试跑：Actions 页面 dispatch 本工作流并勾 dry_run —— 只跑自检与构建，不发布。
+# 成功的可见信号三重：① 自动建 GitHub Release ② Step Summary 打出版本与包页面
+# ③ 发布后轮询 registry 确认版本真的可见（Actions 成功默认不发邮件、npm 也不发）。
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch: # 也可在 Actions 页面手动触发
+    inputs:
+      dry_run:
+        description: '只跑自检与构建，不发布（验证工作流用）'
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -23,13 +32,54 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm publish --provenance --access public
+      # 上传前把「发了才发现」的问题挡住：tag↔版本一致、bin 有效
+      # （npm 会静默剥掉带 './' 前缀的 bin）、files 覆盖入口、版本未被 registry 占用。
+      # 必须在 build 之后——bin 指向的是 dist/ 构建产物。
+      - name: 发布前置自检
+        run: node scripts/preflight.mjs ${{ inputs.dry_run && '--allow-published' || '' }}
+      - name: 发布到 npm
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # 「发成功了但拉不到」必须知道——所以不靠 npm publish 的退出码，去 registry 复核。
+      - name: 确认版本已在 registry 可见
+        if: ${{ github.event_name == 'push' && !inputs.dry_run }}
+        run: |
+          V=$(npm pkg get version | tr -d '"')
+          for i in $(seq 1 18); do
+            if [ "$(npm view "exomind@$V" version 2>/dev/null || true)" = "$V" ]; then
+              echo "registry 已可见：exomind@$V（第 $((i*10)) 秒内）"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::发布后 3 分钟内 registry 未见到 exomind@$V，请用 npm view 复核（可能只是传播延迟）"
+          exit 1
       # 发版成功的可见信号:自动建 Release(Releases 页有条目 + published 通知邮件)。
       # 根因档案: v0.17.0 发布成功但 Actions 成功默认不发邮件、npm 也不发,
       # Releases 页又长期为空(工作流只 publish 不建 Release)→ 「发了但看不见」。
       # --verify-tag 防笔误;--generate-notes 自动生成版本 diff 备注。
-      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+      - name: 建 GitHub Release（可见信号）
+        if: ${{ github.event_name == 'push' && !inputs.dry_run }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 结果写进 Summary
+        if: always()
+        run: |
+          V=$(npm pkg get version | tr -d '"')
+          {
+            echo "### npm 发布：\`${GITHUB_REF_NAME}\`"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "> **dry run**：只跑了自检与构建，未发布。"
+              echo ""
+            fi
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 包 / 命令 | \`exomind\` / \`exomind\`, \`emcli\` |"
+            echo "| 仓内版本 | \`$V\` |"
+            echo "| registry 当前版本 | \`$(npm view exomind version 2>/dev/null || echo '查询失败')\` |"
+            echo "| 包页面 | https://www.npmjs.com/package/exomind |"
+          } >> "$GITHUB_STEP_SUMMARY"
