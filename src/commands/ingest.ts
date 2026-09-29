@@ -31,6 +31,7 @@ export default async function ingest(
     force?: boolean;
     fast?: boolean;
     concurrency?: number;
+    origin?: string;
   },
   args: string[],
 ): Promise<void> {
@@ -65,6 +66,7 @@ export default async function ingest(
     const fastBody: Record<string, unknown> = { content };
     if (opts.title) fastBody.title = opts.title;
     if (opts.tag && opts.tag.length) fastBody.tags = opts.tag;
+    if (opts.origin) fastBody.origin = opts.origin; // R24 前置:hook-auto 打标透传
     const result = await ingestWithRetry(client, fastBody, opTimeout(30000), '/ingest/async');
     if (fileAbs && fileRaw !== null) {
       const man = loadManifest();
@@ -85,6 +87,7 @@ export default async function ingest(
   const body: Record<string, unknown> = { content };
   if (opts.title) body.title = opts.title;
   if (opts.tag && opts.tag.length) body.tags = opts.tag;
+  if (opts.origin) body.origin = opts.origin; // R24 前置:hook-auto 打标透传
 
   hint('⏳ 摄入中: 服务器用 LLM 抽取实体/关系,长内容可能 1-3 分钟…');
   const result = await ingestWithRetry(client, body, opTimeout(300000));

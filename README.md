@@ -100,7 +100,7 @@ emcli install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),�
 | 命令 | 说明 |
 |------|------|
 | `login` / `me` | 配置与查看登录态 |
-| `ingest` / `archive` | 导入/存档知识(文本 / stdin / `--file`) |
+| `ingest` / `archive` | 导入/存档知识(文本 / stdin / `--file`;`--origin <tag>` 来源打标——hook 自动摄入服务端记 `hook-auto`,与用户显式存档区分,R24 候选区判据) |
 | `query` | LLM 问答 |
 | `search` | 全文 / `--hybrid` / `--rerank` 搜索 |
 | `entity` / `relations` | 实体详情、关联实体 |
