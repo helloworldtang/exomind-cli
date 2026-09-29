@@ -48,6 +48,35 @@ const RESEARCH_INSTRUCTION = `[ExoMind 调研结论自动摄入] 检测到结构
 结构路径: 识别问题 → 分析问题 → 定义问题 → 解决问题
 请运行 \`exomind ingest --fast --origin hook-auto\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
+// ── 维度标签(2026-09-30):项目/模块/问题类型,给自动摄入加检索维度 ──
+/** 当前检出项目名(git remote 仓库名,非 git 目录退 cwd 基名)——确定性锚点,不靠 Agent 猜。
+ *  只读 .git/config 文件(无子进程,hook 3s deadline 内安全);worktree/submodule 的
+ *  .git 是文件,readFileSync 会抛 → 落 cwd 基名兜底。 */
+export function detectProjectTag(): string {
+  try {
+    const cfg = fs.readFileSync(path.join(process.cwd(), '.git', 'config'), 'utf-8');
+    const m = cfg.match(/url\s*=\s*[^:\s]*[:/]([^/\s]+?)(?:\.git)?\s*$/m);
+    if (m && m[1]) return m[1];
+  } catch {
+    /* 非 git 目录 / worktree / 无 remote → 走 cwd 兜底 */
+  }
+  const base = path.basename(process.cwd());
+  return base && base !== '/' ? base : '';
+}
+
+/** 维度标签指令行:项目(确定性锚点)/模块(机会主义)/类型(封闭词表)。 */
+export function dimensionTagInstruction(): string {
+  const proj = detectProjectTag();
+  const projPart = proj
+    ? `\`--tag 项目:${proj}\`(当前检出项目为 ${proj},内容相关才加)`
+    : '项目标签(能从上下文判断就加 \`--tag 项目:<名>\`)';
+  return (
+    `维度标签(每条 ingest 尽量带,检索维度靠它们): ${projPart};` +
+    ' 能识别具体模块再加 \`--tag 模块:<模块名>\`(识别不了不强求,宁缺勿滥);' +
+    ' 技术问题类加 \`--tag 类型:架构|功能|性能|安全|环境|数据\` 之一。'
+  );
+}
+
 // ── 模式 ──
 const EXPERIENCE_PATTERNS = [
   /关键经验/, /经验总结/, /踩坑/, /踩过.*坑/, /教训/, /最佳实践/, /设计模式/,
@@ -421,7 +450,7 @@ export async function runHook(client: ApiClient): Promise<void> {
   // 3. 存档/jdit 暗号(冷却)
   if (isSecret && msg.length < 20) {
     if (now - dedup.lastArchive > COOLDOWN_MS) {
-      outputs.push(ARCHIVE_INSTRUCTION);
+      outputs.push(ARCHIVE_INSTRUCTION + '\n' + dimensionTagInstruction());
       dedup.lastArchive = now;
     } else {
       // 冷却中给反馈(避免用户以为没触发);如需立即存档可手动 exomind ingest --fast
@@ -432,8 +461,10 @@ export async function runHook(client: ApiClient): Promise<void> {
     }
   } else if (!isSecret) {
     // 4. 经验 / 5. 调研
-    if (matchesExperience(msg)) outputs.push(EXPERIENCE_INSTRUCTION);
-    else if (matchesResearch(msg)) outputs.push(RESEARCH_INSTRUCTION);
+    if (matchesExperience(msg))
+      outputs.push(EXPERIENCE_INSTRUCTION + '\n' + dimensionTagInstruction());
+    else if (matchesResearch(msg))
+      outputs.push(RESEARCH_INSTRUCTION + '\n' + dimensionTagInstruction());
   }
 
   // 6. 关键词上下文注入
