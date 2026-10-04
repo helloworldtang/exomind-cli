@@ -123,6 +123,40 @@ function runHook(prompt: string): Promise<string> {
   });
 }
 
+// SessionEnd 采集探针(P3 会话编译前置):fire-and-forget,喂会话元数据给
+// emcli hook-session-end 落本地事件流。失败静默——会话结束路径不容阻塞。
+function fireSessionEnd(event: any, ctx: any): void {
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(EMCLI, ['hook-session-end'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  } catch {
+    return;
+  }
+  const timer = setTimeout(() => {
+    try {
+      child.kill();
+    } catch {
+      /* ignore */
+    }
+  }, DEADLINE_MS);
+  timer.unref?.();
+  child.on('error', () => clearTimeout(timer));
+  child.on('close', () => clearTimeout(timer));
+  try {
+    child.stdin?.write(
+      JSON.stringify({
+        source: 'openclaw',
+        session_id: ctx?.sessionId ?? ctx?.sessionID ?? event?.sessionId ?? event?.sessionID,
+        cwd: ctx?.workspaceDir ?? ctx?.cwd ?? event?.cwd,
+        reason: event?.reason,
+      }),
+    );
+    child.stdin?.end();
+  } catch {
+    /* ignore */
+  }
+}
+
 export function register(api: any): void {
   // register 必须同步(OpenClaw 加载器要求),异步桥接放在事件 handler 里
   api.on('before_prompt_build', async (event: any, _ctx: any) => {
@@ -132,6 +166,9 @@ export function register(api: any): void {
     if (!prompt) return undefined;
     const out = await runHook(prompt);
     return out ? { prependContext: out } : undefined;
+  });
+  api.on('session_end', (event: any, ctx: any) => {
+    fireSessionEnd(event, ctx);
   });
 }
 `;

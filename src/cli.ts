@@ -8,6 +8,7 @@ import { ApiClient, ApiError } from './api';
 import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
 import { runHook } from './hook';
+import { runSessionEndHook } from './hook_session_end';
 import { runMcpServer } from './mcp';
 import { maybeNotifyUpdate } from './update-check';
 
@@ -285,6 +286,20 @@ program
     } catch (e) {
       // 钩子失败绝不阻塞用户的 prompt
       process.stderr.write(`[exomind hook] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
+    process.exit(0);
+  });
+
+// ── SessionEnd 采集探针(P3 会话编译前置,纯本地零 token)──
+program
+  .command('hook-session-end')
+  .description('SessionEnd 事件采集(由 install 配置的 hook 调用,非手动):落 ~/.exomind/sessions/events.jsonl')
+  .action(async () => {
+    // 与 hook 同哲学:任何失败绝不阻塞会话结束路径
+    try {
+      await runSessionEndHook();
+    } catch {
+      /* ignore */
     }
     process.exit(0);
   });

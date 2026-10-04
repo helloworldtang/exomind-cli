@@ -59,12 +59,16 @@ export default async function doctor(client: ApiClient): Promise<void> {
   const claudeSkill = path.join(os.homedir(), '.claude', 'skills', 'exomind', 'SKILL.md');
   const claudeSettings = path.join(os.homedir(), '.claude', 'settings.json');
   const claudeJson = path.join(os.homedir(), '.claude.json');
+  const claudeSettingsText = readText(claudeSettings);
   checks.push({
     host: 'claude',
     skill: fileExists(claudeSkill) ? 'ok' : 'missing',
-    hook: /(?:exomind|emcli) hook/.test(readText(claudeSettings)) ? 'ok' : 'missing',
+    hook: /(?:exomind|emcli) hook\b/.test(claudeSettingsText) && /hook-session-end/.test(claudeSettingsText)
+      ? 'ok'
+      : 'missing',
     mcpConfig: mcpServersExomind(claudeJson, 'mcpServers') ? 'ok' : 'missing',
     paths: [claudeSkill, claudeSettings, claudeJson],
+    detail: 'hook = UserPromptSubmit 注入 + SessionEnd 采集(install 同时写两者)',
   });
 
   // Codex(skill + MCP,无 hook)

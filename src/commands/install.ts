@@ -291,6 +291,17 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
       hooks: [{ type: 'command', command: 'emcli hook', statusMessage: 'ExoMind 知识飞轮检索' }],
     });
     hooks.UserPromptSubmit = kept;
+
+    // SessionEnd 采集探针(P3 会话编译前置):落本地事件流,纯本地零 token、失败静默。
+    // 注意正则须匹配 hook-session-end 而不误伤上面的 emcli hook——用完整命令名判定。
+    const endList = (Array.isArray(hooks.SessionEnd) ? hooks.SessionEnd : []) as Array<{
+      hooks?: Array<{ type?: string; command?: string }>;
+    }>;
+    const endKept = endList.filter(
+      (m) => !(m.hooks || []).some((h) => /(?:exomind|emcli) hook-session-end/.test(String(h.command || ''))),
+    );
+    endKept.push({ hooks: [{ type: 'command', command: 'emcli hook-session-end' }] });
+    hooks.SessionEnd = endKept;
     settings.hooks = hooks;
 
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');

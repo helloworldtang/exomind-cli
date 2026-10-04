@@ -112,7 +112,7 @@ emcli install          # 装 skill + hook + MCP(各宿主),全部自动(幂等+�
 | `feedback` | 质量反馈(影响搜索排名) |
 | `install` | 装 skill(Claude+Codex+OpenClaw)+ hook(Claude/OpenClaw)+ MCP(四宿主);`--host`/`--no-skill`/`--no-hook`/`--no-mcp` |
 | `doctor` | 诊断各宿主(claude/codex/opencode/openclaw)skill/hook/MCP/鉴权 状态(`--json`) |
-| `hook` | UserPromptSubmit 钩子(由 install 配置) |
+| `hook` / `hook-session-end` | prompt 注入钩子 / SessionEnd 采集探针(均由 install 配置,后者为 P3 会话编译积累数据,纯本地) |
 
 完整命令参考与排错见 **[CLI 命令指南](./docs/cli-guide.md)**。
 
