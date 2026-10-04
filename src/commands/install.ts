@@ -280,7 +280,7 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
     const settings = (readJson(settingsFile) ?? {}) as Record<string, unknown>;
     const hooks = (settings.hooks as Record<string, unknown>) ?? {};
     const list = (Array.isArray(hooks.UserPromptSubmit) ? hooks.UserPromptSubmit : []) as Array<{
-      hooks?: Array<{ type?: string; command?: string }>;
+      hooks?: Array<{ type?: string; command?: string; statusMessage?: string }>;
     }>;
 
     // 幂等: 移除已存在的 exomind/emcli hook(双名同入口,两种写法都算自家),保留其它工具的 hook

@@ -17,4 +17,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npx tsc --noEmit   # tsup 不做类型检查,单独跑(tsc 零错误是质量门)
       - run: npm test   # 单元测试;e2e 默认 skip(需 EXOMIND_API_KEY)

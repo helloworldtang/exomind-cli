@@ -80,6 +80,14 @@ export const TOOLS = [
   },
 ];
 
+/** MCP 入参是 JSON 任意值,转 query 参数前先收窄类型(schema 已校验,这里是防御)。 */
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+function num(v: unknown, dflt: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : dflt;
+}
+
 /** 单个工具的执行(复用 ApiClient,走与 CLI 完全相同的 REST)。 */
 async function handleTool(client: ApiClient, name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
@@ -88,11 +96,11 @@ async function handleTool(client: ApiClient, name: string, args: Record<string, 
     case 'query':
       return client.post('/query', args, { timeoutMs: opTimeout(180000) });
     case 'search':
-      return client.get('/search', { q: args.keyword ?? args.q, limit: args.limit ?? 10 });
+      return client.get('/search', { q: str(args.keyword ?? args.q), limit: num(args.limit, 10) });
     case 'entity':
       return client.get(`/entities/${encodeURIComponent(String(args.name))}`);
     case 'relations':
-      return client.get(`/relations/${encodeURIComponent(String(args.name))}`, { depth: args.depth ?? 1 });
+      return client.get(`/relations/${encodeURIComponent(String(args.name))}`, { depth: num(args.depth, 1) });
     case 'stats':
       return client.get('/stats');
     default:

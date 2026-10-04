@@ -50,7 +50,10 @@ export async function maybeNotifyUpdate(
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
     const r = await fetch(`${registry}/exomind/latest`, { signal: ctrl.signal });
     clearTimeout(timer);
-    if (r.ok) latest = String((await r.json()).version || '');
+    if (r.ok) {
+      const body = (await r.json()) as { version?: string };
+      latest = String(body.version || '');
+    }
   } catch {
     /* 网络失败静默,明天再查 */
   }
