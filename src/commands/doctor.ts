@@ -1,10 +1,11 @@
-/** exomind doctor — 诊断各宿主(claude/codex/opencode)的 skill/hook/MCP 安装状态 + 鉴权 + MCP initialize。
+/** exomind doctor — 诊断各宿主(claude/codex/opencode/openclaw)的 skill/hook/MCP 安装状态 + 鉴权 + MCP initialize。
  *  依赖 install.ts 的 resolveCodexHome + checkMcp(复用,不另造)。--json 走全局 --json 开关,输出脱敏。 */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { ApiClient } from '../api';
 import { resolveCodexHome, checkMcp } from './install';
+import { resolveOpenclawHome, runOpenclaw } from './install_openclaw';
 import { isJsonMode, ok, dim, yellow, red } from '../format';
 
 type Status = 'ok' | 'missing' | 'invalid' | 'unsupported' | 'failed' | 'skipped';
@@ -88,6 +89,22 @@ export default async function doctor(client: ApiClient): Promise<void> {
     paths: [ocJson],
   });
 
+  // OpenClaw(skill + hook 桥接插件 + MCP;未装 OpenClaw 则整行跳过)
+  const openclawHome = resolveOpenclawHome();
+  if (fs.existsSync(openclawHome)) {
+    const oclSkill = path.join(openclawHome, 'skills', 'exomind', 'SKILL.md');
+    const oclPlugin = path.join(os.homedir(), '.exomind', 'openclaw-plugin', 'index.ts');
+    const oclMcp = (await runOpenclaw(['mcp', 'show', 'exomind'], 10000)).code === 0;
+    checks.push({
+      host: 'openclaw',
+      skill: fileExists(oclSkill) ? 'ok' : 'missing',
+      hook: fileExists(oclPlugin) ? 'ok' : 'missing',
+      mcpConfig: oclMcp ? 'ok' : 'missing',
+      paths: [oclSkill, oclPlugin],
+      detail: 'hook 走 before_prompt_build 桥接插件(plugins install --link);MCP 经 openclaw mcp add',
+    });
+  }
+
   // 鉴权 + MCP initialize(stdio server 三宿主共用,查一次)
   let authed = false;
   let authErr = '';
@@ -125,5 +142,5 @@ export default async function doctor(client: ApiClient): Promise<void> {
     `  auth:        ${authed ? ok('✓ 已登录') : yellow('✗ 未登录/异常')}${authErr ? dim(' ' + authErr) : ''}`,
   );
   console.log(`  mcp init:    ${mcpInit.ok ? ok('✓ ' + mcpInit.detail) : yellow('✗ ' + mcpInit.detail)}`);
-  console.log(dim('\n  缺项用 `emcli install [--host <claude|codex|opencode>]` 补齐;改完重启对应 Agent。'));
+  console.log(dim('\n  缺项用 `emcli install [--host <claude|codex|opencode|openclaw>]` 补齐;改完重启对应 Agent。'));
 }

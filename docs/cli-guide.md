@@ -111,7 +111,7 @@ exomind daily                        # 每日活动摘要
 | 命令 | 说明 |
 |------|------|
 | `exomind hook` | UserPromptSubmit 钩子,由 Claude Code 自动调用(非手动)。读 stdin `{prompt}`,输出 additionalContext |
-| `exomind install [--host <h>] [--no-skill] [--no-hook] [--no-mcp]` | 装 skill(Claude+Codex)+ hook(Claude)+ MCP;默认全装,`--host` 选单宿主 |
+| `exomind install [--host <h>] [--no-skill] [--no-hook] [--no-mcp]` | 装 skill + hook + MCP;默认全装(OpenClaw 按 ~/.openclaw 存在自动检测),`--host <claude\|codex\|opencode\|openclaw>` 选单宿主 |
 
 `exomind hook` 复刻旧 `exomind-context.sh` 的全部行为:存档/jdit 暗号、经验/调研自动摄入、关键词上下文注入(本地缓存,弱服务器友好)、会话去重。零 bash/python/curl/本地 wiki 依赖。
 

@@ -58,11 +58,12 @@ emcli feedback "entities/Redis.md" positive
 
 > 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `emcli login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `emcli login` 的 prompt 读取不走 shell 历史。
 
-## 接入 Claude Code / Codex(一条命令,默认全装)
+## 接入 Claude Code / Codex / OpenClaw(一条命令,默认全装)
 
 ```bash
-emcli install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),全部自动(幂等+备份)
-# 只装某个宿主: emcli install --host codex   (claude | codex | opencode)
+emcli install          # 装 skill + hook + MCP(各宿主),全部自动(幂等+备份)
+# 只装某个宿主: emcli install --host codex   (claude | codex | opencode | openclaw)
+# OpenClaw 缺省按 ~/.openclaw 存在自动检测:skill + before_prompt_build 桥接插件 + MCP
 # 跳过某项: --no-skill / --no-hook / --no-mcp
 ```
 
@@ -86,7 +87,7 @@ emcli install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),�
 
 ## 关于 MCP 工具层(Claude Code / OpenCode / Codex 都已默认装)
 
-`emcli install` 一次写**三个宿主**的 MCP 配置(都幂等+备份,互不干扰,各读各的):
+`emcli install` 一次写**各宿主**的 MCP 配置(Claude/OpenCode/Codex 手写配置文件,OpenClaw 走官方 `openclaw mcp add` 自带 probe;都幂等+备份,互不干扰,各读各的):
 - **Claude Code**:`~/.claude.json` → `mcpServers.exomind`
 - **OpenCode**:`~/.config/opencode/opencode.json` → `mcp.exomind`
 - **Codex**:`$CODEX_HOME/config.toml` → `[mcp_servers.exomind]`
@@ -109,8 +110,8 @@ emcli install          # 装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主),�
 | `review` / `review mark` | FSRS-5 复习队列与评分 |
 | `synthesize` / `topics` / `gaps` / `daily` | 主题综合、选题、缺口、每日摘要 |
 | `feedback` | 质量反馈(影响搜索排名) |
-| `install` | 装 skill(Claude+Codex)+ hook(Claude)+ MCP;`--host`/`--no-skill`/`--no-hook`/`--no-mcp` |
-| `doctor` | 诊断各宿主 skill/hook/MCP/鉴权 状态(`--json`) |
+| `install` | 装 skill(Claude+Codex+OpenClaw)+ hook(Claude/OpenClaw)+ MCP(四宿主);`--host`/`--no-skill`/`--no-hook`/`--no-mcp` |
+| `doctor` | 诊断各宿主(claude/codex/opencode/openclaw)skill/hook/MCP/鉴权 状态(`--json`) |
 | `hook` | UserPromptSubmit 钩子(由 install 配置) |
 
 完整命令参考与排错见 **[CLI 命令指南](./docs/cli-guide.md)**。

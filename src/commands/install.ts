@@ -1,19 +1,28 @@
-/** exomind install — 装 skill(Claude+Codex)+ hook(Claude 独有)+ MCP(Claude/OpenCode/Codex)。
- *  Codex = skill + MCP(无 Claude 的 UserPromptSubmit hook);--host 选择性装某个宿主。 */
+/** exomind install — 装 skill(Claude+Codex+OpenClaw)+ hook(Claude/OpenClaw)+ MCP(四宿主)。
+ *  Codex = skill + MCP(无 prompt-submit hook);OpenClaw = skill + 桥接插件 + MCP(install_openclaw.ts);
+ *  OpenClaw 缺省按 ~/.openclaw 存在自动检测;--host 选择性装某个宿主。 */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { spawn } from 'node:child_process';
 import type { ApiClient } from '../api';
 import { ok, dim, yellow } from '../format';
-import { DEFAULT_BASE_URL, loadConfig } from '../config';
+import { DEFAULT_BASE_URL, loadConfig, CONFIG_DIR } from '../config';
+import {
+  resolveOpenclawHome,
+  installOpenclawSkill,
+  installOpenclawHookPlugin,
+  configureOpenclawMcp,
+  emcliEntryPath,
+} from './install_openclaw';
+import pkg from '../../package.json' assert { type: 'json' };
 
 // CJS 输出: __dirname = dist/,上一级即包根 → skill/claude|codex/SKILL.md
 const PKG_ROOT = path.resolve(__dirname, '..');
 export const CLAUDE_SKILL_SRC = path.join(PKG_ROOT, 'skill', 'claude', 'SKILL.md');
 export const CODEX_SKILL_SRC = path.join(PKG_ROOT, 'skill', 'codex', 'SKILL.md');
 
-export type Host = 'claude' | 'codex' | 'opencode';
+export type Host = 'claude' | 'codex' | 'opencode' | 'openclaw';
 
 export interface InstallOpts {
   host?: Host; // 缺省 undefined = 全装;指定则只装该宿主
@@ -216,14 +225,20 @@ export function checkMcp(timeoutMs = 6000): Promise<{ ok: boolean; detail: strin
 }
 
 export default async function install(client: ApiClient, opts: InstallOpts): Promise<void> {
-  if (opts.host && !['claude', 'codex', 'opencode'].includes(opts.host)) {
-    throw new Error(`未知 --host: ${opts.host}(可选: claude | codex | opencode)`);
+  if (opts.host && !['claude', 'codex', 'opencode', 'openclaw'].includes(opts.host)) {
+    throw new Error(`未知 --host: ${opts.host}(可选: claude | codex | openclaw)`);
   }
   const claudeDir = path.join(os.homedir(), '.claude');
   const skillDestDir = path.join(claudeDir, 'skills', 'exomind');
   const codexHome = resolveCodexHome();
-  // want(h): 缺省(未指定 --host)全装;指定了就只装该 host
+  const openclawHome = resolveOpenclawHome();
+  // OpenClaw 是第四宿主:显式 --host openclaw 必装;缺省全装时按 ~/.openclaw 存在自动检测
+  const openclawDetected = fs.existsSync(openclawHome);
+  if (opts.host === 'openclaw' && !openclawDetected) {
+    throw new Error(`未发现 OpenClaw(${openclawHome} 不存在)。先安装 OpenClaw,或设 OPENCLAW_HOME 指向其目录。`);
+  }
   const want = (h: Host) => !opts.host || opts.host === h;
+  const wantOpenclaw = opts.host === 'openclaw' || (!opts.host && openclawDetected);
 
   // 1. skill(Claude + Codex)
   if (opts.skill !== false) {
@@ -243,6 +258,15 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
         console.log(dim(`  → ${r.dest}`));
       } else {
         console.log(yellow(`✗ Codex skill 安装失败: ${r.reason}`));
+      }
+    }
+    if (wantOpenclaw) {
+      const r = installOpenclawSkill(openclawHome);
+      if (r.ok) {
+        console.log(ok('已安装 OpenClaw skill'));
+        console.log(dim(`  → ${r.dest}`));
+      } else {
+        console.log(yellow(`✗ OpenClaw skill 安装失败: ${r.reason}`));
       }
     }
   }
@@ -274,6 +298,20 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
     console.log(dim('  Codex 当前无对应 prompt-submit hook,靠 skill 触发(jdit/存档/查询)。'));
   }
 
+  // 2b. OpenClaw hook 桥接插件: before_prompt_build → spawn `emcli hook` → prependContext。
+  //     与 Claude 的 UserPromptSubmit 同一实现(关键词注入/暗号/每日发现/marker 去重全复用)。
+  if (opts.hook !== false && wantOpenclaw) {
+    const pluginDir = path.join(CONFIG_DIR, 'openclaw-plugin');
+    const r = await installOpenclawHookPlugin(pluginDir, emcliEntryPath(), pkg.version, openclawHome, backup);
+    if (r.ok) {
+      console.log(ok('已安装 OpenClaw hook 桥接插件 → emcli hook'));
+      console.log(dim(`  → ${r.dir}(before_prompt_build → prependContext,与 Claude hook 同一实现)`));
+      console.log(dim('  若 gateway 未自动重载,运行: openclaw gateway restart'));
+    } else {
+      console.log(yellow(`✗ OpenClaw hook 插件安装失败: ${r.detail}`));
+    }
+  }
+
   // 3. MCP server(Claude/OpenCode/Codex)
   if (opts.mcp !== false) {
     const configured: string[] = [];
@@ -302,6 +340,12 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
       const r = configureCodexMcp(codexHome);
       if (r.ok) configured.push(`Codex (${r.file})`);
       else console.log(yellow(`✗ Codex MCP 配置失败: ${r.reason}`));
+    }
+    if (wantOpenclaw) {
+      // 走官方 CLI(自带 probe 实连验证),不用手改 openclaw.json——其 schema 随版本演进
+      const r = await configureOpenclawMcp(emcliEntryPath());
+      if (r.ok) configured.push('OpenClaw (openclaw mcp add,已 probe)');
+      else console.log(yellow(`✗ OpenClaw MCP 配置失败: ${r.detail}`));
     }
 
     // 清理会覆盖 stdio 的残留 exomind MCP 条目(settings.json mcpServers + 项目级 .mcp.json)
@@ -368,6 +412,9 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
   })();
 
   console.log(yellow('\n可用性自检:'));
+  if (!opts.host && !openclawDetected) {
+    console.log(dim('  (未检测到 OpenClaw(~/.openclaw 不存在),已跳过;装了 OpenClaw 后重跑 install --host openclaw)'));
+  }
   if (!live.api_key) {
     console.log(dim('  (未配置 API Key,跳过服务端自检;exomind login 后重跑 install 可自检)'));
   } else {
@@ -382,6 +429,24 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
     console.log(codexSkillOk ? ok('  Codex skill 已安装') : yellow('  ✗ Codex skill 未安装'));
     console.log(codexMcfgOk ? ok('  Codex MCP 配置存在') : yellow('  ✗ Codex MCP 配置缺失'));
     console.log(dim('  △ Codex 无 UserPromptSubmit hook,依赖 skill 触发(jdit/存档/查询)'));
+  }
+  if (wantOpenclaw) {
+    const ocSkillOk = fs.existsSync(path.join(openclawHome, 'skills', 'exomind', 'SKILL.md'));
+    const ocPluginOk = fs.existsSync(path.join(CONFIG_DIR, 'openclaw-plugin', 'index.ts'));
+    const ocMcpShow = await import('./install_openclaw').then((mod) =>
+      mod.runOpenclaw(['mcp', 'show', 'exomind'], 10000),
+    );
+    console.log(ocSkillOk ? ok('  OpenClaw skill 已安装') : yellow('  ✗ OpenClaw skill 未安装'));
+    console.log(
+      ocPluginOk
+        ? ok('  OpenClaw hook 桥接插件已写入(plugins install --link)')
+        : yellow('  ✗ OpenClaw hook 插件缺失'),
+    );
+    console.log(
+      ocMcpShow.code === 0
+        ? ok('  OpenClaw MCP 配置存在(openclaw mcp show)')
+        : yellow('  ✗ OpenClaw MCP 配置缺失(openclaw mcp add)'),
+    );
   }
 
   console.log(yellow('\n下一步:'));

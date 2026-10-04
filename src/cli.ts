@@ -308,8 +308,8 @@ program
 // ── 安装 skill + hook ──
 program
   .command('install')
-  .description('安装 skill(Claude+Codex)+ hook(Claude)+ MCP(各宿主);默认全装,--host 选单宿主')
-  .option('--host <h>', '只装某个宿主: claude | codex | opencode(缺省全装)')
+  .description('安装 skill + hook + MCP(各宿主);默认全装(OpenClaw 按存在自动检测),--host 选单宿主')
+  .option('--host <h>', '只装某个宿主: claude | codex | opencode | openclaw(缺省全装)')
   .option('--no-skill', '不刷新 skill(不删已有)')
   .option('--no-hook', '不写 UserPromptSubmit hook(仅 Claude)')
   .option('--no-mcp', '不写 MCP server 配置')
