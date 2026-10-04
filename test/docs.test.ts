@@ -33,7 +33,7 @@ function parseCliSurface(): CliSurface {
   const src = readFileSync(join(ROOT, 'src', 'cli.ts'), 'utf8');
 
   const subcommands = new Set<string>();
-  for (const m of src.matchAll(/\.command\(\s*'([a-z]+)/g)) subcommands.add(m[1]);
+  for (const m of src.matchAll(/\.command\(\s*'([a-z][a-z-]*)/g)) subcommands.add(m[1]);
   // .alias('...') 注册的别名同样是合法子命令(真 CLI 可直接调用,如 archive→ingest)
   for (const m of src.matchAll(/\.alias\(\s*'([a-z]+)/g)) subcommands.add(m[1]);
 
