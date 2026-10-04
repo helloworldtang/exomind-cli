@@ -16,4 +16,10 @@ describe('update-check: compareVersions', () => {
     assert.equal(compareVersions('latest', '0.10.0'), 0);
     assert.equal(compareVersions('0.10', '0.10.0'), 0);
   });
+  test('pre-release 不参与提醒(不把 rc/beta 推给日常用户)', () => {
+    assert.equal(compareVersions('0.19.0', '0.20.0-rc.1'), 0, 'latest 是 rc → 不提醒');
+    assert.equal(compareVersions('0.20.0-beta.3', '0.20.0'), 0, 'current 是 pre-release → 不提醒');
+    // build metadata 忽略,核心版本照常比较
+    assert.ok(compareVersions('0.19.0', '0.20.0+build.7') < 0);
+  });
 });

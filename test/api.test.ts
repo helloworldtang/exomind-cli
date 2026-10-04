@@ -1,6 +1,6 @@
 import { describe, test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiClient, ApiError } from '../src/api';
+import { ApiClient, ApiError, isTransientError } from '../src/api';
 
 const origFetch = global.fetch;
 
@@ -86,5 +86,74 @@ describe('ApiClient', () => {
           && ae.body?.type === 'daily_quota';
       },
     );
+  });
+
+  test('GET 瞬时错误(503)自动重试后成功——query/search 等读命令不再一撞 5xx 即败', async () => {
+    let calls = 0;
+    mockFetch(() => {
+      calls++;
+      if (calls === 1) return { ok: false, status: 503, statusText: 'unavailable', text: async () => 'Service Unavailable' };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: 1 }) };
+    });
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    const r = await c.get('/search', { q: 'x' });
+    assert.equal(r.ok, 1);
+    assert.equal(calls, 2);
+  });
+
+  test('GET retries:0 → 瞬时错误直接抛(hook 等绝对 deadline 场景)', async () => {
+    let calls = 0;
+    mockFetch(() => {
+      calls++;
+      return { ok: false, status: 502, statusText: 'bad gw', text: async () => 'x' };
+    });
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    await assert.rejects(() => c.get('/keywords', undefined, { retries: 0 }));
+    assert.equal(calls, 1, '不重试');
+  });
+
+  test('GET 超时不重试(重试只会再等一个满超时);网络错误重试', async () => {
+    let calls = 0;
+    global.fetch = (async () => {
+      calls++;
+      throw Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+    }) as typeof fetch;
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    await assert.rejects(
+      () => c.get('/x', undefined, { timeoutMs: 50 }),
+      (e: unknown) => e instanceof ApiError && e.status === 0 && (e as ApiError).timedOut === true,
+    );
+    assert.equal(calls, 1, '超时(AbortError)不进重试');
+
+    let netCalls = 0;
+    global.fetch = (async () => {
+      netCalls++;
+      if (netCalls === 1) throw new Error('ECONNRESET');
+      return { ok: true, status: 200, text: async () => '{}' } as any;
+    }) as typeof fetch;
+    assert.deepEqual(await c.get('/x'), {});
+    assert.equal(netCalls, 2, '网络故障(非超时)重试');
+  });
+
+  test('GET 429 不走内置重试(限流交给调用方按 Retry-After 处理)', async () => {
+    let calls = 0;
+    mockFetch(() => {
+      calls++;
+      return { ok: false, status: 429, statusText: 'Too Many Requests', text: async () => JSON.stringify({ detail: '限流' }) };
+    });
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    await assert.rejects(() => c.get('/x'));
+    assert.equal(calls, 1);
+  });
+
+  test('isTransientError: 5xx/网络=真;超时/429/4xx=假', () => {
+    assert.ok(isTransientError(new ApiError(502, 'x')));
+    assert.ok(isTransientError(new ApiError(503, 'x')));
+    assert.ok(isTransientError(new ApiError(504, 'x')));
+    assert.ok(isTransientError(new ApiError(0, '网络错误')));
+    assert.ok(!isTransientError(new ApiError(0, '超时', {}, null, true)), '超时不重试');
+    assert.ok(!isTransientError(new ApiError(429, 'x')));
+    assert.ok(!isTransientError(new ApiError(404, 'x')));
+    assert.ok(!isTransientError(new Error('普通错')));
   });
 });

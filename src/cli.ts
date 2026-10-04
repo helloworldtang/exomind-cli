@@ -29,6 +29,8 @@ import whoami from './commands/whoami';
 import deletePage from './commands/delete';
 import getPage from './commands/get';
 import trash from './commands/trash';
+import backfill from './commands/backfill';
+import drain from './commands/drain';
 import installCmd from './commands/install';
 import doctor from './commands/doctor';
 
@@ -135,6 +137,31 @@ program
     3,
   )
   .action(run(ingest));
+
+// ── 补跑 / 补投 ──
+// backfill: 服务端降级任务(原文已入库、实体抽取未完成)的重抽;数据源=manifest 的
+// degraded 标记,不需要服务端新端点。drain: 本地 spool 队列(断网/网关失败未提交)的补投。
+program
+  .command('backfill [dir]')
+  .description('补跑降级摄入: 原文已入库但实体抽取未完成的文件(可选目录限定)')
+  .option(
+    '-c, --concurrency <n>',
+    '并发数(默认 3)',
+    (v: string) => parseInt(v, 10) || 3,
+    3,
+  )
+  .action(run(backfill));
+
+program
+  .command('drain')
+  .description('补投本地队列: 上次 ingest 因网络/网关失败未提交的文件(~/.exomind/spool)')
+  .option(
+    '-c, --concurrency <n>',
+    '并发数(默认 3)',
+    (v: string) => parseInt(v, 10) || 3,
+    3,
+  )
+  .action(run(drain));
 
 // ── 删除 / 回收站 ──
 program

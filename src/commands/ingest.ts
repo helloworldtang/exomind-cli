@@ -4,7 +4,7 @@ import { opTimeout, type ApiClient } from '../api';
 import { output, ok, green, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
 import { runDirIngestest, ingestWithRetry } from '../ingest_dir';
-import { loadManifest, saveManifest, recordFile } from '../manifest';
+import { loadManifest, saveManifest, recordFile, acquireManifestLock } from '../manifest';
 
 /** 解析 --dir 的目录路径。容忍两种写法:
  *  - `ingest --dir <目录>`(文档写法,commander 直接给 string)
@@ -69,9 +69,14 @@ export default async function ingest(
     if (opts.origin) fastBody.origin = opts.origin; // R24 前置:hook-auto 打标透传
     const result = await ingestWithRetry(client, fastBody, opTimeout(30000), '/ingest/async');
     if (fileAbs && fileRaw !== null) {
-      const man = loadManifest();
-      recordFile(man, fileAbs, fileRaw, opts.title || path.basename(fileAbs));
-      saveManifest(man);
+      const release = acquireManifestLock(); // 与并发 --dir 互斥(尽力而为,拿不到锁照写)
+      try {
+        const man = loadManifest();
+        recordFile(man, fileAbs, fileRaw, opts.title || path.basename(fileAbs));
+        saveManifest(man);
+      } finally {
+        release?.();
+      }
     }
     output(result, () => {
       console.log(ok('已快速存入: 原文已可检索,实体/关系精炼在后台进行'));
@@ -94,9 +99,14 @@ export default async function ingest(
 
   // --file 摄入记录 manifest(与 --dir 共用同一份,保证跨模式判重:--file 摄过的文件,--dir 会跳过)
   if (fileAbs && fileRaw !== null) {
-    const man = loadManifest();
-    recordFile(man, fileAbs, fileRaw, opts.title || path.basename(fileAbs));
-    saveManifest(man);
+    const release = acquireManifestLock(); // 与并发 --dir 互斥(尽力而为,拿不到锁照写)
+    try {
+      const man = loadManifest();
+      recordFile(man, fileAbs, fileRaw, opts.title || path.basename(fileAbs));
+      saveManifest(man);
+    } finally {
+      release?.();
+    }
   }
 
   output(result, () => {

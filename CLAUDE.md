@@ -22,7 +22,7 @@ npm 发布由 **GitHub Action 在收到 tag 时触发** `npm publish`。**只 pu
 ## 构建 / 测试 / 本地试用
 
 - 构建:`npm run build`(tsup → dist/cli.js)。
-- 测试:`npm test`(61 测试,无网络/服务器依赖)。
+- 测试:`npm test`(无网络/服务器依赖,全量见运行输出)。
 - 本地试用:`npm run build && node dist/cli.js <cmd>`,或 `npm link` 后直接 `exomind <cmd>`。
 
 ## 结构

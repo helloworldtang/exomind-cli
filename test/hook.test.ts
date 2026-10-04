@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm, buildDiscoverInjection, contextBlock, hookDeadlineMs } from '../src/hook';
+import { matchesExperience, matchesResearch, matchEntities, isSecretWord, hasTechTerm, buildDiscoverInjection, contextBlock, hookDeadlineMs, injectionMarker, injectionMarkerHash, alreadyInjected } from '../src/hook';
 
 describe('hook: isSecretWord', () => {
   test('匹配存档/jdit 及尾部标点', () => {
@@ -150,5 +150,27 @@ describe('hook: 绝对 deadline（R10）', () => {
     process.env.EXOMIND_HOOK_TIMEOUT_MS = '1500';
     assert.equal(hookDeadlineMs(), 1500);
     delete process.env.EXOMIND_HOOK_TIMEOUT_MS;
+  });
+});
+
+describe('hook: 注入 origin marker(防同组实体重复注入)', () => {
+  test('指纹与实体顺序/大小写无关,组不同则不同', () => {
+    assert.equal(injectionMarkerHash(['Redis', 'SQLite']), injectionMarkerHash(['sqlite', ' redis ']));
+    assert.notEqual(injectionMarkerHash(['Redis']), injectionMarkerHash(['Redis', 'SQLite']));
+  });
+
+  test('contextBlock 含 marker 且保持注入头前缀契约(startsWith)', () => {
+    const ents = [{ name: 'Redis', description: '缓存' }, { name: 'SQLite', description: '库' }];
+    const out = contextBlock(ents);
+    assert.ok(out.startsWith('[ExoMind 知识飞轮上下文]'), '注入头前缀是下游可断言的行为面');
+    assert.ok(out.includes(injectionMarker(['Redis', 'SQLite'])));
+  });
+
+  test('alreadyInjected: 含注入块的 prompt 命中同指纹;不同实体组不误伤', () => {
+    const ents = [{ name: 'Redis', description: 'x' }];
+    const block = contextBlock(ents);
+    assert.ok(alreadyInjected(block, ['Redis']));
+    assert.ok(!alreadyInjected('正文里提到 Redis 但没有注入块', ['Redis']));
+    assert.ok(!alreadyInjected(block, ['SQLite']));
   });
 });

@@ -4,10 +4,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ApiClient } from './api';
-import { opTimeout, ApiError } from './api';
-import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, type Manifest } from './manifest';
+import { opTimeout, ApiError, isTransientError } from './api';
+import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, acquireManifestLock, type Manifest } from './manifest';
 import { invalidateKeywordCache } from './config';
 import { readFileText } from './io';
+import { spoolEntry } from './spool';
 import { output, green, red, dim } from './format';
 
 export interface DirOpts {
@@ -59,7 +60,7 @@ export function deriveTitle(file: string, content: string): string {
 }
 
 export interface DirPlan {
-  toIngest: { path: string; content: string; title: string; hash: string }[];
+  toIngest: { path: string; content: string; title: string; hash: string; tags?: string[] }[];
   toSkip: string[];
 }
 
@@ -195,24 +196,8 @@ export async function retryWith429<T>(fn: () => Promise<T>, maxAttempts = 3): Pr
   }
 }
 
-/** 瞬时错误(502/503/504/网络)指数退避重试,GET 轮询用。其它错误立即抛出。 */
-export async function retryTransient<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      lastErr = e;
-      const transient = e instanceof ApiError && ([502, 503, 504].includes(e.status) || e.status === 0);
-      if (transient && attempt < maxAttempts) {
-        await sleep(Math.pow(2, attempt - 1) * 1000);
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw lastErr;
-}
+/** 瞬时错误指数退避重试(实现在 api.ts,与 ApiClient 共用一套瞬时判定)。 */
+export { retryTransient } from './api';
 
 /** 挂起到次日 0 点(由 reset epoch 指定),期间打印剩余分钟倒计时。 */
 async function suspendUntilMidnight(resetEpoch: number): Promise<void> {
@@ -239,8 +224,146 @@ interface PendingJob {
   jobId: number;
 }
 
+export interface TrackOpts {
+  tag?: string[];
+  concurrency?: number;
+  /** 轮询间隔(ms)与连续失败轮上限——测试注入用,生产走默认。 */
+  pollIntervalMs?: number;
+  maxFailedRounds?: number;
+}
+
+export interface TrackResult {
+  added: number;
+  updated: number;
+  degraded: number;
+  failed: number;
+  /** 瞬时/网络提交失败且已入本地 spool 的条数(等待 exomind drain 补投)。 */
+  spooled: number;
+}
+
+/** 提交 + 轮询 + 记账(--dir 与 drain/backfill 共用):
+ *  阶段 1 并发提交 /ingest/async(瞬时/网络失败 → 入 spool,断网可补投);
+ *  阶段 2 轮询 /ingest/status 直到全 done/failed——连续多轮全军覆没时显式报错退出,
+ *  不再静默吞到 10min 总超时(此前 catch{} 只靠 deadline 兜底)。
+ *  每 job 完成立即 recordFile/saveManifest(崩溃安全)。 */
+export async function submitAndTrack(
+  client: ApiClient,
+  items: { path: string; content: string; title: string; hash: string; tags?: string[] }[],
+  opts: TrackOpts,
+  manifest: Manifest,
+): Promise<TrackResult> {
+  const concurrency = Math.max(1, opts.concurrency ?? 3);
+  const pollInterval = opts.pollIntervalMs ?? 2000;
+  const maxFailedRounds = opts.maxFailedRounds ?? 5;
+  let added = 0;
+  let updated = 0;
+  let failed = 0;
+  let degraded = 0;
+  let spooled = 0;
+
+  // 阶段 1:并发提交 /ingest/async,收 job_id
+  const pending: PendingJob[] = [];
+  await mapWithConcurrency(items, concurrency, async (f) => {
+    try {
+      const res = await ingestWithRetry(
+        client,
+        { content: f.content, title: f.title, tags: f.tags ?? opts.tag },
+        30000,
+        '/ingest/async',
+      );
+      pending.push({ file: f, jobId: res.job_id });
+    } catch (e) {
+      // 瞬时/网络失败(重试耗尽)→ 入本地 spool,`exomind drain` 或下次重跑补投;
+      // 429 配额/限流耗尽、4xx 等确定性失败不 spool(重投也一样失败)。
+      if (isTransientError(e)) {
+        spooled++;
+        spoolEntry({ path: f.path, hash: f.hash, title: f.title, tags: f.tags ?? opts.tag, queued_at: new Date().toISOString() });
+        process.stderr.write(
+          `  ${red('⏸')} ${path.basename(f.path)} 提交失败(网络/网关) — 已入本地队列,稍后 \`exomind drain\` 补投\n`,
+        );
+      } else {
+        failed++;
+        process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 提交失败 — ${friendlyMsg(e as Error)}\n`);
+      }
+    }
+  });
+
+  // 阶段 2:轮询直到全 done/failed
+  const totalJobs = pending.length;
+  let done = 0;
+  let failedRounds = 0; // 连续「整轮全失败」计数(单次轮询失败下轮重试,不计 failed)
+  const pollDeadline = Date.now() + opTimeout(600000); // 轮询总超时 10min(EXOMIND_TIMEOUT_MS 可覆盖)
+  const inFlight = new Map<number, DirPlan['toIngest'][number]>(
+    pending.map((p) => [p.jobId, p.file]),
+  );
+  while (inFlight.size > 0) {
+    if (Date.now() > pollDeadline) {
+      for (const [, f] of inFlight) {
+        failed++;
+        process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 轮询超时\n`);
+      }
+      inFlight.clear();
+      break;
+    }
+    let roundOk = 0;
+    let roundErr = 0;
+    await Promise.all(
+      [...inFlight.entries()].map(async ([jobId, f]) => {
+        try {
+          const s = await retryWith429(() => client.get('/ingest/status', { job_id: jobId }));
+          roundOk++; // 状态查询成功(即便 job 还在跑) = 网络通
+          if (s.status !== 'done' && s.status !== 'failed') return;
+          inFlight.delete(jobId);
+          done++;
+          if (s.status === 'failed') {
+            failed++;
+            process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 处理失败 — ${s.error || '未知错误'}\n`);
+            return;
+          }
+          const prev = manifest[f.path];
+          recordFile(manifest, f.path, f.content, f.title, s.extracted === false ? 'degraded' : 'ok');
+          saveManifest(manifest);
+          if (s.extracted === false) {
+            degraded++;
+            process.stderr.write(`  ⚠ ${path.basename(f.path)} 降级 — 原文已存,实体抽取待补跑(exomind backfill)\n`);
+          } else if (prev) {
+            updated++;
+            process.stderr.write(`  ${green('✓')} 更新 — 实体 ${s.entities ?? 0}/概念 ${s.concepts ?? 0}\n`);
+          } else {
+            added++;
+            process.stderr.write(`  ${green('✓')} 新增 — 实体 ${s.entities ?? 0}/概念 ${s.concepts ?? 0}\n`);
+          }
+        } catch {
+          roundErr++;
+        }
+      }),
+    );
+    // 整轮全失败 → 计数;连续多轮说明服务器不可达,显式报错退出而非干等 10min
+    if (roundErr > 0 && roundOk === 0) {
+      failedRounds++;
+      if (failedRounds >= maxFailedRounds) {
+        for (const [, f] of inFlight) {
+          failed++;
+          process.stderr.write(
+            `  ${red('✗')} ${path.basename(f.path)} 轮询连续 ${failedRounds} 轮失败(服务器不可达) — 任务已提交,可能仍在后台处理;网络恢复后重跑核对\n`,
+          );
+        }
+        inFlight.clear();
+        break;
+      }
+    } else {
+      failedRounds = 0;
+    }
+    if (inFlight.size > 0) {
+      process.stderr.write(`${dim('⏳')} [完成 ${done}/${totalJobs}] 轮询中…\n`);
+      await sleep(pollInterval);
+    }
+  }
+  return { added, updated, degraded, failed, spooled };
+}
+
 /** 执行目录增量摄入(异步):并发提交 /ingest/async → 轮询 /ingest/status → 汇总。
- *  异步秒回避免大文件 504;每 job 完成立即 recordFile/saveManifest(崩溃安全)。 */
+ *  异步秒回避免大文件 504;manifest 加锁防并发 --dir 互覆(尽力而为,拿不到锁降级告警)。 */
 export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: string): Promise<void> {
   const files = walkDir(dir, !!opts.recursive, opts.pattern || '*.md');
   if (!files.length) {
@@ -248,122 +371,67 @@ export async function runDirIngestest(client: ApiClient, opts: DirOpts, dir: str
     return;
   }
 
-  const manifest = loadManifest();
-  const plan = planIngestest(files, manifest, !!opts.force);
-  const total = files.length;
-  const concurrency = Math.max(1, opts.concurrency ?? 3);
-  process.stderr.write(
-    `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}(异步,并发提交 ${concurrency})\n`,
-  );
-
-  // 挂起期间 Ctrl+C:保存已摄入进度
-  const onSigInt = (): void => {
-    if (suspended) {
-      saveManifest(manifest);
-      process.stderr.write('\n已保存进度,退出。次日重跑同命令即可续跑。\n');
-    }
-    process.exit(130);
-  };
-  process.on('SIGINT', onSigInt);
-
-  let added = 0;
-  let updated = 0;
-  let failed = 0;
-  let degraded = 0;
-
-  // 阶段 1:并发提交 /ingest/async,收 job_id
-  const pending: PendingJob[] = [];
-  try {
-    await mapWithConcurrency(plan.toIngest, concurrency, async (f) => {
-      try {
-        const res = await ingestWithRetry(
-          client,
-          { content: f.content, title: f.title, tags: opts.tag },
-          30000,
-          '/ingest/async',
-        );
-        pending.push({ file: f, jobId: res.job_id });
-      } catch (e) {
-        failed++;
-        process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 提交失败 — ${friendlyMsg(e as Error)}\n`);
-      }
-    });
-
-    // 阶段 2:轮询直到全 done/failed
-    const totalJobs = pending.length;
-    let done = 0;
-    const pollDeadline = Date.now() + opTimeout(600000); // 轮询总超时 10min(EXOMIND_TIMEOUT_MS 可覆盖)
-    const inFlight = new Map<number, DirPlan['toIngest'][number]>(
-      pending.map((p) => [p.jobId, p.file]),
+  const release = acquireManifestLock();
+  if (!release) {
+    process.stderr.write(
+      dim('  ⚠ 另一个 ingest 正在运行(manifest 锁被占),本次无锁运行,结束状态可能被覆盖\n'),
     );
-    while (inFlight.size > 0) {
-      if (Date.now() > pollDeadline) {
-        for (const [, f] of inFlight) {
-          failed++;
-          process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 轮询超时\n`);
-        }
-        inFlight.clear();
-        break;
-      }
-      await Promise.all(
-        [...inFlight.entries()].map(async ([jobId, f]) => {
-          try {
-            const s = await retryWith429(() => client.get('/ingest/status', { job_id: jobId }));
-            if (s.status !== 'done' && s.status !== 'failed') return;
-            inFlight.delete(jobId);
-            done++;
-            if (s.status === 'failed') {
-              failed++;
-              process.stderr.write(`  ${red('✗')} ${path.basename(f.path)} 处理失败 — ${s.error || '未知错误'}\n`);
-              return;
-            }
-            const prev = manifest[f.path];
-            recordFile(manifest, f.path, f.content, f.title);
-            saveManifest(manifest);
-            if (s.extracted === false) {
-              degraded++;
-              process.stderr.write(`  ⚠ ${path.basename(f.path)} 降级 — 原文已存,实体抽取待补跑\n`);
-            } else if (prev) {
-              updated++;
-              process.stderr.write(`  ${green('✓')} 更新 — 实体 ${s.entities ?? 0}/概念 ${s.concepts ?? 0}\n`);
-            } else {
-              added++;
-              process.stderr.write(`  ${green('✓')} 新增 — 实体 ${s.entities ?? 0}/概念 ${s.concepts ?? 0}\n`);
-            }
-          } catch {
-            // 单次轮询失败(网络),下轮重试,不计 failed
-          }
-        }),
-      );
-      if (inFlight.size > 0) {
-        process.stderr.write(`${dim('⏳')} [完成 ${done}/${totalJobs}] 轮询中…\n`);
-        await sleep(2000);
-      }
-    }
-    cleanupStale(manifest, dir);
-    saveManifest(manifest);
-  } finally {
-    process.removeListener('SIGINT', onSigInt);
   }
+  try {
+    const manifest = loadManifest();
+    const plan = planIngestest(files, manifest, !!opts.force);
+    const total = files.length;
+    const concurrency = Math.max(1, opts.concurrency ?? 3);
+    process.stderr.write(
+      `目录 ${dir}: ${total} 文件 — 待摄入 ${plan.toIngest.length},跳过 ${plan.toSkip.length}(异步,并发提交 ${concurrency})\n`,
+    );
 
-  const allUpToDate = added + updated + degraded === 0 && plan.toSkip.length > 0 && failed === 0;
-  output(
-    { added, updated, degraded, skipped: plan.toSkip.length, failed, total, dir, allUpToDate },
-    () => {
-      console.log(
-        green('✓ 目录摄入完成') +
-          dim(
-            `: 新增 ${added} / 更新 ${updated} / 降级 ${degraded} / 跳过 ${plan.toSkip.length} / 失败 ${failed} (共 ${total})`,
-          ),
-      );
-      if (degraded > 0) {
+    // 挂起期间 Ctrl+C:保存已摄入进度
+    const onSigInt = (): void => {
+      if (suspended) {
+        saveManifest(manifest);
+        process.stderr.write('\n已保存进度,退出。次日重跑同命令即可续跑。\n');
+      }
+      process.exit(130);
+    };
+    process.on('SIGINT', onSigInt);
+
+    let r: TrackResult;
+    try {
+      r = await submitAndTrack(client, plan.toIngest, opts, manifest);
+      cleanupStale(manifest, dir);
+      saveManifest(manifest);
+    } finally {
+      process.removeListener('SIGINT', onSigInt);
+    }
+
+    const { added, updated, degraded, failed, spooled } = r;
+    // spooled>0 说明有文件没投出去,不能宣称「全部已是最新」
+    const allUpToDate =
+      added + updated + degraded === 0 && plan.toSkip.length > 0 && failed === 0 && spooled === 0;
+    output(
+      { added, updated, degraded, skipped: plan.toSkip.length, failed, spooled, total, dir, allUpToDate },
+      () => {
         console.log(
-          dim(`（${degraded} 条降级:原文已入库,实体抽取待补——可稍后重跑或 exomind ingest --backfill 补跑）`),
+          green('✓ 目录摄入完成') +
+            dim(
+              `: 新增 ${added} / 更新 ${updated} / 降级 ${degraded} / 跳过 ${plan.toSkip.length} / 失败 ${failed} (共 ${total})`,
+            ),
         );
-      }
-      if (allUpToDate) {
-        console.log(dim('（全部已是最新,无需重摄;除非用户明确要求强制刷新,否则不要加 --force）'));
-      }
-    },
-  );
+        if (degraded > 0) {
+          console.log(
+            dim(`（${degraded} 条降级:原文已入库,实体抽取待补——可稍后运行 exomind backfill 补跑）`),
+          );
+        }
+        if (spooled > 0) {
+          console.log(dim(`（${spooled} 条因网络/网关失败已入本地队列:exomind drain 补投,或网络恢复后重跑同命令）`));
+        }
+        if (allUpToDate) {
+          console.log(dim('（全部已是最新,无需重摄;除非用户明确要求强制刷新,否则不要加 --force）'));
+        }
+      },
+    );
+  } finally {
+    release?.();
+  }
 }

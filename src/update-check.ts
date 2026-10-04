@@ -10,15 +10,16 @@ import { CACHE_DIR } from './config';
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 3000;
 
-/** 语义化版本比较:<0 表示 current 旧于 latest;解析失败返回 0(不提醒)。 */
+/** 语义化版本比较:<0 表示 current 旧于 latest;解析失败或任一侧为 pre-release 返回 0(不提醒)。
+ *  pre-release(如 0.20.0-rc.1)不参与提醒:等正式版发布自然提醒,避免把 rc 推给日常用户。 */
 export function compareVersions(current: string, latest: string): number {
-  const parse = (v: string): number[] =>
-    v
-      .replace(/^v/, '')
-      .split('.')
-      .map(Number);
-  const a = parse(current);
-  const b = parse(latest);
+  const strip = (v: string): string => v.replace(/^v/, '').split('+')[0];
+  const c = strip(current);
+  const l = strip(latest);
+  if (c.includes('-') || l.includes('-')) return 0;
+  const parse = (v: string): number[] => v.split('.').map(Number);
+  const a = parse(c);
+  const b = parse(l);
   if (a.length !== 3 || b.length !== 3 || [...a, ...b].some(Number.isNaN)) return 0;
   for (let i = 0; i < 3; i++) {
     if (a[i] !== b[i]) return a[i] - b[i];

@@ -62,4 +62,44 @@ describe('manifest', () => {
     assert.ok(otherD in man); // 其它目录不动
     fs.rmSync(root, { recursive: true, force: true });
   });
+
+  test('recordFile: ok 为缺省不落字段;degraded 落标记(backfill 依赖)', () => {
+    const man: m.Manifest = {};
+    m.recordFile(man, '/tmp/x.md', '内容', 'X');
+    assert.equal(man['/tmp/x.md'].status, undefined);
+    m.recordFile(man, '/tmp/y.md', '内容', 'Y', 'degraded');
+    assert.equal(man['/tmp/y.md'].status, 'degraded');
+    // 存量 manifest(无 status 字段)加载后照常工作——字段可选
+    assert.deepEqual(JSON.parse(JSON.stringify(man['/tmp/x.md'])).status, undefined);
+  });
+
+  test('saveManifest 原子写: 不留 .tmp 残留', () => {
+    fs.rmSync(path.join(TMP, '.exomind'), { recursive: true, force: true });
+    m.saveManifest({ '/tmp/a.md': { hash: 'h1', ingested_at: 't', title: 'A', size: 10 } });
+    const leftovers = fs.readdirSync(path.join(TMP, '.exomind')).filter((f) => f.includes('.tmp'));
+    assert.deepEqual(leftovers, []);
+  });
+
+  test('manifest 锁: 获取→二次获取超时降级 null→释放后可再获取', () => {
+    fs.rmSync(path.join(TMP, '.exomind'), { recursive: true, force: true });
+    const release = m.acquireManifestLock(200);
+    assert.ok(typeof release === 'function');
+    // 自己持锁(同 pid)→ 不抢占,短暂超时后返回 null(降级为无锁运行)
+    assert.equal(m.acquireManifestLock(200), null);
+    release();
+    release(); // 幂等
+    const again = m.acquireManifestLock(200);
+    assert.ok(typeof again === 'function');
+    again();
+  });
+
+  test('manifest 锁: 持锁进程已死 → stale 锁被抢占', () => {
+    fs.rmSync(path.join(TMP, '.exomind'), { recursive: true, force: true });
+    fs.mkdirSync(path.join(TMP, '.exomind'), { recursive: true });
+    // 伪造一个"死进程"持有的锁(pid 极大,基本不可能存活)
+    fs.writeFileSync(path.join(TMP, '.exomind', 'manifest.lock'), '99999999');
+    const release = m.acquireManifestLock(200);
+    assert.ok(typeof release === 'function', 'stale 锁应被抢占');
+    release();
+  });
 });
