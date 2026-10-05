@@ -63,12 +63,15 @@ export default async function doctor(client: ApiClient): Promise<void> {
   checks.push({
     host: 'claude',
     skill: fileExists(claudeSkill) ? 'ok' : 'missing',
-    hook: /(?:exomind|emcli) hook\b/.test(claudeSettingsText) && /hook-session-end/.test(claudeSettingsText)
-      ? 'ok'
-      : 'missing',
+    hook:
+      /(?:exomind|emcli) hook\b/.test(claudeSettingsText) &&
+      /hook-session-end/.test(claudeSettingsText) &&
+      /hook-session-start/.test(claudeSettingsText)
+        ? 'ok'
+        : 'missing',
     mcpConfig: mcpServersExomind(claudeJson, 'mcpServers') ? 'ok' : 'missing',
     paths: [claudeSkill, claudeSettings, claudeJson],
-    detail: 'hook = UserPromptSubmit 注入 + SessionEnd 采集(install 同时写两者)',
+    detail: 'hook = UserPromptSubmit 注入 + SessionEnd 采集 + SessionStart 接力(install 同时写三者)',
   });
 
   // Codex(skill + MCP,无 hook)

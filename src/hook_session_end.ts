@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CONFIG_DIR } from './config';
 import { readStdin } from './io';
+import { resolveProjectKey } from './project_key';
 
 export const SESSIONS_DIR = path.join(CONFIG_DIR, 'sessions');
 export const SESSION_EVENTS = path.join(SESSIONS_DIR, 'events.jsonl');
@@ -21,6 +22,9 @@ export interface SessionEndEvent {
   /** 事件来源: claude / openclaw / manual。 */
   source: string;
   session_id?: string;
+  /** 项目身份键(R31 handoff 三级匹配键:git remote > 目录)——以事件 cwd 计算,
+   *  非 process.cwd()(OpenClaw 网关桥接时两者不同)。 */
+  project_key?: string;
   /** 会话转录路径(Claude Code SessionEnd 提供)——未来编译的素材指针。 */
   transcript_path?: string;
   cwd?: string;
@@ -39,12 +43,16 @@ export function normalizeEvent(raw: string, source: string, now = new Date()): S
   }
   const str = (v: unknown): string | undefined =>
     typeof v === 'string' && v.trim() ? v.trim() : undefined;
+  const cwd = str(j.cwd ?? j.workspaceDir);
   const ev: SessionEndEvent = {
     ts: now.toISOString(),
     source,
     session_id: str(j.session_id ?? j.sessionId),
+    // project_key 允许调用方显式传入(j.project_key,未来探针上报管道复用);
+    // 缺失时以事件 cwd 现算——cwd 也没有就落 undefined(服务端按 source 兜底)。
+    project_key: str(j.project_key) ?? (cwd ? resolveProjectKey(cwd) : undefined),
     transcript_path: str(j.transcript_path ?? j.transcriptPath),
-    cwd: str(j.cwd ?? j.workspaceDir),
+    cwd,
     reason: str(j.reason),
   };
   return Object.fromEntries(Object.entries(ev).filter(([, v]) => v !== undefined)) as SessionEndEvent;

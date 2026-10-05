@@ -9,6 +9,7 @@ import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
 import { runHook } from './hook';
 import { runSessionEndHook } from './hook_session_end';
+import { runSessionStartStandalone } from './hook_session_start';
 import { runMcpServer } from './mcp';
 import { maybeNotifyUpdate } from './update-check';
 
@@ -287,6 +288,15 @@ program
       // 钩子失败绝不阻塞用户的 prompt
       process.stderr.write(`[exomind hook] ${e instanceof Error ? e.message : String(e)}\n`);
     }
+    process.exit(0);
+  });
+
+// ── SessionStart 接力注入(R32-1,P3 handoff 读出侧;服务端未上线时静默)──
+program
+  .command('hook-session-start')
+  .description('会话首帧接力注入(由 install 配置的 hook 调用,非手动):拉 handoff 包进上下文')
+  .action(async () => {
+    await runSessionStartStandalone(); // 内部全程静默,绝不阻塞会话启动
     process.exit(0);
   });
 

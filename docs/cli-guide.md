@@ -111,7 +111,8 @@ exomind daily                        # 每日活动摘要
 | 命令 | 说明 |
 |------|------|
 | `exomind hook` | UserPromptSubmit 钩子,由 Claude Code 自动调用(非手动)。读 stdin `{prompt}`,输出 additionalContext |
-| `exomind hook-session-end` | SessionEnd 采集探针(install 自动配置):会话结束事件落 `~/.exomind/sessions/events.jsonl`(纯本地零 token,P3 会话编译的前置数据) |
+| `exomind hook-session-end` | SessionEnd 采集探针(install 自动配置):会话结束事件落 `~/.exomind/sessions/events.jsonl`(含 project_key=git remote 归一化键,纯本地零 token) |
+| `exomind hook-session-start` | 会话首帧接力注入(install 自动配置):拉 handoff 接力包进上下文;服务端 /handoff/next 上线前静默空输出,上线即生效无需再发版 |
 | `exomind install [--host <h>] [--no-skill] [--no-hook] [--no-mcp]` | 装 skill + hook + MCP;默认全装(OpenClaw 按 ~/.openclaw 存在自动检测),`--host <claude\|codex\|opencode\|openclaw>` 选单宿主 |
 
 `exomind hook` 复刻旧 `exomind-context.sh` 的全部行为:存档/jdit 暗号、经验/调研自动摄入、关键词上下文注入(本地缓存,弱服务器友好)、会话去重。零 bash/python/curl/本地 wiki 依赖。

@@ -302,6 +302,17 @@ export default async function install(client: ApiClient, opts: InstallOpts): Pro
     );
     endKept.push({ hooks: [{ type: 'command', command: 'emcli hook-session-end' }] });
     hooks.SessionEnd = endKept;
+
+    // SessionStart 接力注入(P3 handoff 读出侧):服务端 /handoff/next 未上线时静默空输出,
+    // 端点上线即生效(R31),CLI 无需再发版。
+    const startList = (Array.isArray(hooks.SessionStart) ? hooks.SessionStart : []) as Array<{
+      hooks?: Array<{ type?: string; command?: string }>;
+    }>;
+    const startKept = startList.filter(
+      (m) => !(m.hooks || []).some((h) => /(?:exomind|emcli) hook-session-start/.test(String(h.command || ''))),
+    );
+    startKept.push({ hooks: [{ type: 'command', command: 'emcli hook-session-start' }] });
+    hooks.SessionStart = startKept;
     settings.hooks = hooks;
 
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');

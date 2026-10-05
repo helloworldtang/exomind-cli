@@ -157,15 +157,71 @@ function fireSessionEnd(event: any, ctx: any): void {
   }
 }
 
+// 会话首帧接力(P3 handoff 读出侧):startedSessions 首次命中本会话时,先拉一次
+// 接力包(emcli hook-session-start,cwd 从 ctx 取)拼进 prependContext。服务端
+// /handoff/next 未上线时该命令静默空输出,拼接为空,无副作用。
+const handoffFetched = new Set<string>();
+
+function fetchHandoff(ctx: any, cwdValue: string | undefined): Promise<string> {
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(EMCLI, ['hook-session-start'], { stdio: ['pipe', 'pipe', 'ignore'] });
+    } catch {
+      resolve('');
+      return;
+    }
+    let out = '';
+    let settled = false;
+    const finish = (v: string): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+      resolve(v.trim());
+    };
+    const timer = setTimeout(() => finish(''), DEADLINE_MS + 1500);
+    child.stdout?.on('data', (d: Buffer) => {
+      out += d.toString();
+    });
+    child.on('error', () => finish(''));
+    child.on('close', () => finish(out));
+    try {
+      child.stdin?.write(
+        JSON.stringify({
+          session_id: ctx?.sessionId ?? ctx?.sessionID ?? '',
+          cwd: cwdValue,
+        }),
+      );
+      child.stdin?.end();
+    } catch {
+      finish('');
+    }
+  });
+}
+
 export function register(api: any): void {
   // register 必须同步(OpenClaw 加载器要求),异步桥接放在事件 handler 里
-  api.on('before_prompt_build', async (event: any, _ctx: any) => {
+  api.on('before_prompt_build', async (event: any, ctx: any) => {
     const prompt = promptText(
       event?.prompt ?? event?.userPrompt ?? event?.message ?? event?.messages?.at?.(-1),
     );
-    if (!prompt) return undefined;
-    const out = await runHook(prompt);
-    return out ? { prependContext: out } : undefined;
+    const cwdValue = ctx?.workspaceDir ?? ctx?.cwd ?? event?.cwd;
+    const sessionId = ctx?.sessionId ?? ctx?.sessionID;
+    const parts: string[] = [];
+    if (prompt) parts.push(await runHook(prompt));
+    // 首帧且本会话未拉过接力 → 先拉接力再拼上下文(每会话仅一次)
+    if (sessionId && !handoffFetched.has(sessionId)) {
+      handoffFetched.add(sessionId);
+      const handoff = await fetchHandoff(ctx, cwdValue);
+      if (handoff) parts.unshift(handoff);
+    }
+    const joined = parts.filter(Boolean).join('\\n\\n');
+    return joined ? { prependContext: joined } : undefined;
   });
   api.on('session_end', (event: any, ctx: any) => {
     fireSessionEnd(event, ctx);
