@@ -10,7 +10,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CONFIG_DIR } from './config';
+import type { ApiClient } from './api';
+import { CONFIG_DIR, resolveConfig } from './config';
 import { readStdin } from './io';
 import { resolveProjectKey } from './project_key';
 
@@ -72,5 +73,26 @@ export function appendEvent(ev: SessionEndEvent): boolean {
 export async function runSessionEndHook(): Promise<void> {
   const raw = await readStdin();
   if (!raw.trim()) return; // 空 payload 不记(避免手工误触发污染)
-  appendEvent(normalizeEvent(raw, 'claude'));
+  const ev = normalizeEvent(raw, 'claude');
+  appendEvent(ev);
+  // R32-5 上报管道:服务端幂等(session_key),失败静默——本地 events.jsonl 仍是
+  // 完整重放源,下次会话结束时同样的事件会再次上报(服务端 created=false 去重)。
+  try {
+    const { ApiClient } = await import('./api');
+    const client: ApiClient = new ApiClient(resolveConfig());
+    await client.post(
+      '/sessions/end',
+      {
+        source: ev.source,
+        session_id: ev.session_id,
+        project_key: ev.project_key,
+        cwd: ev.cwd,
+        transcript_path: ev.transcript_path,
+        reason: ev.reason,
+      },
+      { timeoutMs: 8000, retries: 0 }, // 会话结束路径:不重试不阻塞(spool 哲学的静默变体)
+    );
+  } catch {
+    /* 服务端未上线/网络失败 → 本地事件已落,后续重放兜底 */
+  }
 }

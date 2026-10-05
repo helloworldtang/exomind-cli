@@ -33,6 +33,7 @@ import getPage from './commands/get';
 import trash from './commands/trash';
 import backfill from './commands/backfill';
 import drain from './commands/drain';
+import handoff from './commands/handoff';
 import installCmd from './commands/install';
 import doctor from './commands/doctor';
 
@@ -164,6 +165,14 @@ program
     3,
   )
   .action(run(drain));
+
+// ── 会话接力(P3)──
+program
+  .command('handoff [project...]')
+  .description('接力: 不带参数=认领当前项目的接力包;指定项目名=跨项目显式认领;--note=手动创建')
+  .option('--note <text>', '手动创建接力包(挂到当前项目,下次会话优先送达)')
+  .option('--cwd <path>', '项目目录(缺省当前目录)')
+  .action(run(handoff));
 
 // ── 删除 / 回收站 ──
 program

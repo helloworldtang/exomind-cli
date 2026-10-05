@@ -100,3 +100,14 @@ describe('探针 project_key 集成(SessionEnd 写入侧)', () => {
     assert.equal(ev2.project_key, 'explicit');
   });
 });
+
+describe('handoff 命令:项目短名解析', () => {
+  test('matchProjectKey: 精确 > 尾段等价 > 子串;无命中 null', async () => {
+    const { matchProjectKey } = await import('../src/commands/handoff');
+    const known = ['github.com/a/repo', 'gitlab.com/b/other', 'github.com/a/repo-x'];
+    assert.equal(matchProjectKey('github.com/a/repo', known), 'github.com/a/repo');
+    assert.equal(matchProjectKey('a/repo', known), 'github.com/a/repo');
+    assert.equal(matchProjectKey('other', known), 'gitlab.com/b/other');
+    assert.equal(matchProjectKey('不存在', known), null);
+  });
+});
