@@ -44,6 +44,17 @@ jobs:
       - name: 发布到 npm
         if: ${{ !inputs.dry_run }}
         run: npm publish --provenance --access public
+      # 发版成功的可见信号:自动建 Release(Releases 页有条目 + published 通知邮件)。
+      # 根因档案: v0.17.0 发布成功但 Actions 成功默认不发邮件、npm 也不发,
+      # Releases 页又长期为空(工作流只 publish 不建 Release)→ 「发了但看不见」。
+      # --verify-tag 防笔误;--generate-notes 自动生成版本 diff 备注。
+      # 顺序铁则:排在「确认 registry 可见」之前——Release 创建只依赖 publish 成功,
+      # 不被事后观测挟持(v0.24.1 事故:观测误报失败导致本步骤被跳过,Release 靠人工补建)。
+      - name: 建 GitHub Release（可见信号）
+        if: ${{ github.event_name == 'push' && !inputs.dry_run }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # 「发成功了但拉不到」必须知道——所以不靠 npm publish 的退出码，去 registry 复核。
       # 直打 registry origin 而非 npm view：后者可能命中 CDN/本地负缓存，v0.24.1 曾因此
       # 在版本已可见（time 13:19:56）的情况下最后 3 分钟轮询仍全部 miss，发布被误判失败。
@@ -62,15 +73,6 @@ jobs:
           done
           echo "::error::发布后 5 分钟内 registry 未见到 exomind@$V（最后 HTTP $code），请手动 curl https://registry.npmjs.org/exomind/$V 复核（可能只是传播延迟）"
           exit 1
-      # 发版成功的可见信号:自动建 Release(Releases 页有条目 + published 通知邮件)。
-      # 根因档案: v0.17.0 发布成功但 Actions 成功默认不发邮件、npm 也不发,
-      # Releases 页又长期为空(工作流只 publish 不建 Release)→ 「发了但看不见」。
-      # --verify-tag 防笔误;--generate-notes 自动生成版本 diff 备注。
-      - name: 建 GitHub Release（可见信号）
-        if: ${{ github.event_name == 'push' && !inputs.dry_run }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 结果写进 Summary
         if: always()
         run: |
