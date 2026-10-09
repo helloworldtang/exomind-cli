@@ -43,14 +43,14 @@ describe('login: 设备码流程', () => {
       throw new Error(`意外请求: ${u} ${init?.method ?? ''}`);
     }) as typeof fetch;
 
-    const key = await deviceLogin('https://x.test');
+    const key = await deviceLogin('https://x.test', { openBrowser: false });
     assert.equal(key, 'sk_live_dev_1');
     assert.ok(calls >= 2);
   });
 
   test('发起端点 404 → 抛 ApiError(login 据此退回粘贴流程)', async () => {
     global.fetch = (async () => jsonResponse(404, { detail: 'Not Found' })) as typeof fetch;
-    await assert.rejects(deviceLogin('https://x.test'), (e: unknown) => e instanceof ApiError && e.status === 404);
+    await assert.rejects(deviceLogin('https://x.test', { openBrowser: false }), (e: unknown) => e instanceof ApiError && e.status === 404);
   });
 
   test('会话过期(expired_token)→ 明确报错', async () => {
@@ -61,6 +61,6 @@ describe('login: 设备码流程', () => {
       }
       return jsonResponse(400, { error: 'expired_token' });
     }) as typeof fetch;
-    await assert.rejects(deviceLogin('https://x.test'), /过期/);
+    await assert.rejects(deviceLogin('https://x.test', { openBrowser: false }), /过期/);
   });
 });

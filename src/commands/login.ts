@@ -33,8 +33,10 @@ function openBrowser(url: string): void {
   }
 }
 
-/** 设备码流程:发起 → 指路 → 轮询。拿到 key 返回;服务端不支持/超时抛错(调用方决定是否退回粘贴)。 */
-export async function deviceLogin(baseUrl: string): Promise<string> {
+/** 设备码流程:发起 → 指路 → 轮询。拿到 key 返回;服务端不支持/超时抛错(调用方决定是否退回粘贴)。
+ *
+ * opts.openBrowser=false 供测试用——不真开系统浏览器(测试环境 spawn('open') 会真弹出)。 */
+export async function deviceLogin(baseUrl: string, opts: { openBrowser?: boolean } = {}): Promise<string> {
   const boot = new ApiClient({ base_url: baseUrl, api_key: 'device-boot' }); // 白名单端点,不发真实凭证
   const info: Record<string, any> = await boot.post('/auth/device/code', {
     name: `emcli@${os.hostname().slice(0, 60)}`,
@@ -51,7 +53,7 @@ export async function deviceLogin(baseUrl: string): Promise<string> {
   console.log(`  1. 打开 ${cyan(url)}`);
   console.log(`  2. 输入设备码 ${bold(userCode)} 并批准`);
   console.log('');
-  openBrowser(url);
+  if (opts.openBrowser !== false) openBrowser(url);
 
   const deadline = Date.now() + expiresIn * 1000;
   while (Date.now() < deadline) {
