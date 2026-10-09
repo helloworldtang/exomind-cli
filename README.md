@@ -6,7 +6,7 @@ ExoMind 不做 Agent,做 Agent 的插件:你的知识、经验、踩坑记录沉
 
 ```bash
 npm install -g exomind
-emcli login               # 粘贴 youhuale.cn/ui/account 的 API Key
+emcli login               # 设备码登录:浏览器批准,免粘贴(自动打开 youhuale.cn/ui/device)
 emcli install             # skill + hook + MCP,四宿主一次装齐(幂等,可重复执行)
 ```
 
@@ -47,7 +47,7 @@ emcli feedback "entities/Redis.md" positive
 
 ## 凭证管理
 
-`emcli login` 输入的凭证持久化到本地,后续命令自动读取,无需重复登录。
+`emcli login` 默认走**设备码登录**:终端显示 8 位设备码并打开浏览器,你在网页上批准后,CLI 自动拿到专属 API Key(10 分钟内有效,无需复制粘贴)。服务端未升级时自动退回手工粘贴;脚本化场景用 `emcli login --api-key <key>`。凭证持久化到本地,后续命令自动读取,无需重复登录。
 
 - **存储位置**:`~/.exomind/config.json`(明文 JSON),文件权限 `0600`(仅所有者可读写;Windows 无 POSIX 权限则忽略)。
 - **凭证类型**:服务端 `auth_middleware` 同时接受 **API Key**(从 `youhuale.cn/ui/account` 复制)与 **GitHub token**(`gh_` 前缀);两者统一以 `Authorization: Bearer` 发送,CLI 不关心是哪种。
@@ -95,7 +95,7 @@ emcli install          # 装 skill + hook + MCP(各宿主),全部自动(幂等+�
 
 只关 MCP:`emcli install --no-mcp`(三个宿主都不写)。手写/其它宿主(如 Cursor)参考 [docs/mcp.md](./docs/mcp.md)。
 
-`emcli mcp` 是本地 stdio MCP server,把 ingest/query/search/entity/relations/stats 暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
+`emcli mcp` 是本地 stdio MCP server,把 12 个核心命令(ingest/query/search/entity/relations/stats/review/review_mark/synthesize/topics/daily/gaps)暴露为 typed tool;复用同一份凭证,三平台都能跑(本地 stdio,不涉及远程 SSE 的 Windows 坑)。
 
 ## 命令一览
 

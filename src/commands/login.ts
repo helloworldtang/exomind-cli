@@ -1,9 +1,15 @@
-/** exomind login — 配置 base_url + 凭证,写入 ~/.exomind/config.json (0600)。 */
+/** exomind login — 配置 base_url + 凭证,写入 ~/.exomind/config.json (0600)。
+ *
+ * 默认走设备码流程(免粘贴):POST /auth/device/code → 浏览器批准 → 轮询拿 key。
+ * 服务端未上设备码端点(404)或 --api-key 指定时,退回手工粘贴流程。
+ */
+import { spawn } from 'node:child_process';
+import * as os from 'node:os';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ApiClient, ApiError } from '../api';
 import { saveConfig, DEFAULT_BASE_URL } from '../config';
-import { ok, dim, yellow } from '../format';
+import { ok, dim, yellow, bold, cyan } from '../format';
 
 async function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({ input, output });
@@ -14,6 +20,59 @@ async function prompt(question: string): Promise<string> {
   }
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** 尽力打开浏览器(失败静默——SSH/无桌面环境只打 URL)。 */
+function openBrowser(url: string): void {
+  try {
+    const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+    const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
+  } catch {
+    /* 打不开就算了,用户手点 URL */
+  }
+}
+
+/** 设备码流程:发起 → 指路 → 轮询。拿到 key 返回;服务端不支持/超时抛错(调用方决定是否退回粘贴)。 */
+export async function deviceLogin(baseUrl: string): Promise<string> {
+  const boot = new ApiClient({ base_url: baseUrl, api_key: 'device-boot' }); // 白名单端点,不发真实凭证
+  const info: Record<string, any> = await boot.post('/auth/device/code', {
+    name: `emcli@${os.hostname().slice(0, 60)}`,
+  });
+  const userCode = String(info.user_code || '');
+  const interval = Math.max(1, Number(info.interval) || 3);
+  const expiresIn = Math.max(30, Number(info.expires_in) || 600);
+  const url = String(info.verification_url || '/ui/device').startsWith('http')
+    ? String(info.verification_url)
+    : `${baseUrl.replace(/\/$/, '')}/ui/device?code=${encodeURIComponent(userCode)}`;
+
+  console.log('');
+  console.log(bold('设备登录'));
+  console.log(`  1. 打开 ${cyan(url)}`);
+  console.log(`  2. 输入设备码 ${bold(userCode)} 并批准`);
+  console.log('');
+  openBrowser(url);
+
+  const deadline = Date.now() + expiresIn * 1000;
+  while (Date.now() < deadline) {
+    await sleep(interval * 1000);
+    try {
+      const r: Record<string, any> = await boot.post('/auth/device/token', {
+        device_code: info.device_code,
+      });
+      if (r && r.api_key) return String(r.api_key);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) {
+        const detail = String(e.body?.error || e.detail || '');
+        if (detail === 'authorization_pending') continue; // 正常等待
+        throw new Error('设备登录会话已过期,请重新执行 emcli login');
+      }
+      throw e; // 网络/服务端错误直接抛
+    }
+  }
+  throw new Error(`等待批准超时(${expiresIn}s),请重新执行 emcli login`);
+}
+
 export default async function login(
   _client: ApiClient,
   opts: { baseUrl?: string; apiKey?: string },
@@ -21,6 +80,16 @@ export default async function login(
   const baseUrl = opts.baseUrl || DEFAULT_BASE_URL;
   let token = opts.apiKey || '';
 
+  if (!token) {
+    // 默认设备码(浏览器批准,免粘贴);服务端未升级(404/405)退回手工粘贴
+    try {
+      token = await deviceLogin(baseUrl);
+    } catch (e) {
+      const unsupported = e instanceof ApiError && (e.status === 404 || e.status === 405);
+      if (!unsupported) throw e;
+      console.log(yellow('该服务器暂不支持设备登录,退回手工粘贴。'));
+    }
+  }
   if (!token) {
     console.log(dim('从 youhuale.cn/ui/account (登录后) 复制 API Key 或登录 token。'));
     token = await prompt('凭证: ');

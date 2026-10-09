@@ -5,7 +5,7 @@ description: "ExoMind knowledge base client. Load this skill FIRST (before readi
 
 # ExoMind CLI
 
-`exomind` 是跨平台 CLI,经 REST 连接你的 ExoMind 知识飞轮(替代 Windows 上不稳定的 MCP 客户端)。一次性 `exomind login`(粘贴 `youhuale.cn/ui/account` 的 API Key)后,所有命令在 Windows / macOS / Linux 行为一致。命令报「未登录」→ 先 `exomind login`。
+`exomind` 是跨平台 CLI,经 REST 连接你的 ExoMind 知识飞轮(替代 Windows 上不稳定的 MCP 客户端)。一次性 `exomind login`(设备码:浏览器批准免粘贴;退路是粘贴 `youhuale.cn/ui/account` 的 API Key)后,所有命令在 Windows / macOS / Linux 行为一致。命令报「未登录」→ 先 `exomind login`。
 
 ## 快速决策(要做什么 → 跑哪条)
 
@@ -86,7 +86,7 @@ exomind ingest --dir ~/workspace/notes --pattern "*.md"   # 默认就是 *.md
 
 ### 登录态
 ```bash
-exomind login                 # 配置服务器 + 粘贴 API Key(交互式)
+exomind login                 # 配置服务器(设备码登录,浏览器批准)
 exomind me                    # 当前登录态/服务器/凭证(whoami 同义)
 ```
 
