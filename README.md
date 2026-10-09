@@ -1,21 +1,22 @@
-# exomind
+# exomind — 所有 Agent 的共享外脑
 
-> ExoMind 知识飞轮的跨平台命令行客户端。通过 REST 与服务器交互,装一次,Windows / macOS / Linux 一致可用。
+> ExoMind 知识飞轮的 Agent 接入面:一条命令,把你的外脑挂进任何 MCP 宿主——Claude Code / Codex / OpenCode / OpenClaw / Cursor。
 
-替代在 Windows 上连不上的 MCP 客户端;Mac/Linux 同样适用。对标 PipeOne 的 `@pipeone/cli` + skill 模式。
-
-- **跨平台**:纯 Node,Windows PowerShell / macOS / Linux 行为完全一致,无需 Git Bash / Python / curl。
-- **零运行时依赖**:`commander` / `picocolors` 由 tsup 打进单文件,基于 Node 18+ 全局 `fetch`。
-- **服务器零改动**:命令与服务端 REST 端点 1:1,认证走 `Authorization: Bearer`。
-- **自带飞轮**:`emcli hook` 子命令跨平台复刻旧 bash hook(存档暗号 / 经验·调研自动摄入 / 关键词上下文注入)。
-
-## 安装
+ExoMind 不做 Agent,做 Agent 的插件:你的知识、经验、踩坑记录沉淀在知识飞轮里,任何 Agent 通过 CLI(本包)、MCP 工具、hook 注入三种方式读写同一份外脑——**Agent 换了一茬又一茬,外脑永远是你的**。
 
 ```bash
 npm install -g exomind
 emcli login               # 粘贴 youhuale.cn/ui/account 的 API Key
-emcli me                  # 验证登录
+emcli install             # skill + hook + MCP,四宿主一次装齐(幂等,可重复执行)
 ```
+
+装完后,宿主里的 Agent 自动获得:相关知识的**上下文注入**(每条 prompt 前)、12 个 **MCP typed tools**(查询/搜索/摄入/复习/综合/缺口分析)、以及"存档"暗号触发的**经验自动摄入**。
+
+- **跨宿主**:MCP 是标准协议,同一份 stdio server 全宿主通用;skill/hook 由 `emcli install` 按宿主自动配置。
+- **跨平台**:纯 Node,Windows PowerShell / macOS / Linux 行为完全一致,无需 Git Bash / Python / curl。
+- **零运行时依赖**:`commander` / `picocolors` 由 tsup 打进单文件,基于 Node 18+ 全局 `fetch`。
+- **服务器零改动**:命令与服务端 REST 端点 1:1,认证走 `Authorization: Bearer`。
+- **自带飞轮**:`emcli hook` 子命令跨平台复刻旧 bash hook(存档暗号 / 经验·调研自动摄入 / 关键词上下文注入)。
 
 > **命令名**:npm 包名是 `exomind`,装出的 CLI 有两个等价命令名(bin 双名同入口):本 README 示例统一用 `emcli`,敲 `exomind` 完全等价。
 
