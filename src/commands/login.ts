@@ -1,6 +1,6 @@
 /** exomind login — 配置 base_url + 凭证,写入 ~/.exomind/config.json (0600)。
  *
- * 默认走设备码流程(免粘贴):POST /auth/device/code → 浏览器批准 → 轮询拿 key。
+ * 默认走设备码流程(免粘贴):POST /auth/device/code → 浏览器「授权登录」 → 轮询拿 key。
  * 服务端未上设备码端点(404)或 --api-key 指定时,退回手工粘贴流程。
  */
 import { spawn } from 'node:child_process';
@@ -51,7 +51,7 @@ export async function deviceLogin(baseUrl: string, opts: { openBrowser?: boolean
   console.log('');
   console.log(bold('设备登录'));
   console.log(`  1. 打开 ${cyan(url)}`);
-  console.log(`  2. 输入设备码 ${bold(userCode)} 并批准`);
+  console.log(`  2. 确认设备码 ${bold(userCode)},点击「授权登录」`);
   console.log('');
   if (opts.openBrowser !== false) openBrowser(url);
 
@@ -72,7 +72,7 @@ export async function deviceLogin(baseUrl: string, opts: { openBrowser?: boolean
       throw e; // 网络/服务端错误直接抛
     }
   }
-  throw new Error(`等待批准超时(${expiresIn}s),请重新执行 emcli login`);
+  throw new Error(`等待授权超时(${expiresIn}s),请重新执行 emcli login`);
 }
 
 export default async function login(
@@ -83,7 +83,7 @@ export default async function login(
   let token = opts.apiKey || '';
 
   if (!token) {
-    // 默认设备码(浏览器批准,免粘贴);服务端未升级(404/405)退回手工粘贴
+    // 默认设备码(浏览器「授权登录」,免粘贴);服务端未升级(404/405)退回手工粘贴
     try {
       token = await deviceLogin(baseUrl);
     } catch (e) {
