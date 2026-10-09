@@ -58,21 +58,24 @@ jobs:
       # 「发成功了但拉不到」必须知道——所以不靠 npm publish 的退出码，去 registry 复核。
       # 直打 registry origin 而非 npm view：后者可能命中 CDN/本地负缓存，v0.24.1 曾因此
       # 在版本已可见（time 13:19:56）的情况下最后 3 分钟轮询仍全部 miss，发布被误判失败。
+      # 但 origin 也有 CDN 边缘负缓存：v0.25.0 直 curl 同一 URL，5 分钟全 404（事后该版本
+      # 一直可见）——轮询 URL 带随机 query 绕开负缓存。
+      # 观测不闸门（同「建 GitHub Release」的顺序铁则）：发布成败已由 npm publish 退出码
+      # 闸门，本步超时只 warning 不 exit 1，避免传播延迟把成功的发布打成失败（v0.24.1/v0.25.0 两罚）。
       - name: 确认版本已在 registry 可见
         if: ${{ github.event_name == 'push' && !inputs.dry_run }}
         run: |
           V=$(npm pkg get version | tr -d '"')
           code=000
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/exomind/$V")
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/exomind/$V?t=$RANDOM$RANDOM")
             if [ "$code" = "200" ]; then
               echo "registry 已可见：exomind@$V（第 $((i*10)) 秒内，HTTP $code）"
               exit 0
             fi
             sleep 10
           done
-          echo "::error::发布后 5 分钟内 registry 未见到 exomind@$V（最后 HTTP $code），请手动 curl https://registry.npmjs.org/exomind/$V 复核（可能只是传播延迟）"
-          exit 1
+          echo "::warning::发布后 5 分钟内 registry 未见到 exomind@$V（最后 HTTP $code），请手动 curl https://registry.npmjs.org/exomind/$V 复核（可能只是传播延迟）"
       - name: 结果写进 Summary
         if: always()
         run: |
