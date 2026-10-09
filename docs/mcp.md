@@ -57,6 +57,12 @@ openclaw mcp add exomind --command <emcli绝对路径> --arg mcp
 | `entity` | name | GET /entities/{name} |
 | `relations` | name, depth? | GET /relations/{name} |
 | `stats` | — | GET /stats |
+| `review` | limit? | GET /review |
+| `review_mark` | name, rating (1-4) | POST /review/mark |
+| `synthesize` | topic, depth? | POST /synthesize |
+| `topics` | count? | GET /suggest-topics |
+| `daily` | days? | GET /daily-summary |
+| `gaps` | days? | GET /knowledge-gaps |
 
 工具执行错误返回 `isError: true`(按 MCP 规范),不会污染协议层。
 

@@ -4,8 +4,10 @@ import { ApiClient } from '../src/api';
 import { handleMessage, TOOLS } from '../src/mcp';
 
 const origFetch = global.fetch;
-function mockFetch(impl: (url: string) => { ok: boolean; status: number; statusText?: string; text: () => Promise<string> }): void {
-  global.fetch = ((url: string) => Promise.resolve(impl(url))) as typeof fetch;
+function mockFetch(
+  impl: (url: string, init?: RequestInit) => { ok: boolean; status: number; statusText?: string; text: () => Promise<string> },
+): void {
+  global.fetch = ((url: string, init?: RequestInit) => Promise.resolve(impl(url, init))) as typeof fetch;
 }
 afterEach(() => {
   global.fetch = origFetch;
@@ -82,6 +84,100 @@ describe('mcp: tools/call', () => {
     assert.match(called, /\/search\?/);
     assert.match(called, /q=redis/);
     assert.match(called, /limit=5/);
+  });
+
+  test('新增能力面工具在 tools/list 中(review/synthesize/topics/daily/gaps)', () => {
+    const names = TOOLS.map((t) => t.name);
+    for (const n of ['review', 'review_mark', 'synthesize', 'topics', 'daily', 'gaps']) {
+      assert.ok(names.includes(n), `应有 ${n}`);
+    }
+  });
+
+  test('review 拼接 limit 并请求 /review', async () => {
+    let called = '';
+    mockFetch((url) => {
+      called = url;
+      return { ok: true, status: 200, text: async () => JSON.stringify({ reviews: [] }) };
+    });
+    await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'tools/call',
+      params: { name: 'review', arguments: { limit: 6 } },
+    });
+    assert.match(called, /\/review\?/);
+    assert.match(called, /limit=6/);
+  });
+
+  test('review_mark 以 query 参数 POST /review/mark,非法 rating 报错', async () => {
+    let called = '';
+    let method = '';
+    mockFetch((url, init) => {
+      called = url;
+      method = init?.method ?? '';
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true }) };
+    });
+    await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+      params: { name: 'review_mark', arguments: { name: 'Redis', rating: 3 } },
+    });
+    assert.match(called, /\/review\/mark\?/);
+    assert.match(called, /name=Redis/);
+    assert.match(called, /rating=3/);
+    assert.equal(method, 'POST');
+
+    const bad = (await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: { name: 'review_mark', arguments: { name: 'Redis', rating: 9 } },
+    })) as { result: { isError: boolean; content: { text: string }[] } };
+    assert.equal(bad.result.isError, true);
+    assert.match(bad.result.content[0].text, /rating/);
+  });
+
+  test('synthesize POST /synthesize 带 topic/depth', async () => {
+    let called = '';
+    let body = '';
+    mockFetch((url, init) => {
+      called = url;
+      body = String(init?.body ?? '');
+      return { ok: true, status: 200, text: async () => JSON.stringify({ synthesis: '...' }) };
+    });
+    await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: { name: 'synthesize', arguments: { topic: 'MCP 治理', depth: 3 } },
+    });
+    assert.match(called, /\/synthesize$/);
+    assert.match(body, /"topic"/);
+    assert.match(body, /"depth":3/);
+  });
+
+  test('topics/daily/gaps 分别映射 /suggest-topics /daily-summary /knowledge-gaps', async () => {
+    const seen: string[] = [];
+    mockFetch((url) => {
+      seen.push(url.replace('https://x.test', ''));
+      return { ok: true, status: 200, text: async () => JSON.stringify({}) };
+    });
+    for (const [name, args] of [
+      ['topics', { count: 3 }],
+      ['daily', { days: 2 }],
+      ['gaps', { days: 15 }],
+    ] as const) {
+      await handleMessage(client(), {
+        jsonrpc: '2.0',
+        id: 12,
+        method: 'tools/call',
+        params: { name, arguments: { ...args } },
+      });
+    }
+    assert.ok(seen.some((u) => u.startsWith('/suggest-topics?') && u.includes('count=3')), `应请求 /suggest-topics: ${seen}`);
+    assert.ok(seen.some((u) => u.startsWith('/daily-summary?') && u.includes('days=2')), `应请求 /daily-summary: ${seen}`);
+    assert.ok(seen.some((u) => u.startsWith('/knowledge-gaps?') && u.includes('days=15')), `应请求 /knowledge-gaps: ${seen}`);
   });
 
   test('工具执行失败 → isError:true(非 JSON-RPC error)', async () => {

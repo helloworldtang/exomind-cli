@@ -78,6 +78,70 @@ export const TOOLS = [
     description: '知识飞轮统计(节点/关系数)。',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'review',
+    description: 'FSRS-5 间隔复习:取当前待复习的知识卡列表(实体名/类型/超期天数)。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: '返回条数(默认 12)' },
+      },
+    },
+  },
+  {
+    name: 'review_mark',
+    description: '标记一条复习结果(FSRS-5 评分,复习后调用)。rating: 1=忘记 2=吃力 3=顺利 4=轻松。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '实体名称(来自 review 返回的 name)' },
+        rating: { type: 'integer', description: '1-4: 1=忘记 2=吃力 3=顺利 4=轻松' },
+      },
+      required: ['name', 'rating'],
+    },
+  },
+  {
+    name: 'synthesize',
+    description: '围绕一个主题综合知识飞轮中的相关页面,生成结构化综述(长时操作,数十秒到数分钟)。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: '主题(实体名或关键词)' },
+        depth: { type: 'integer', description: '综合深度 1-3(默认 2)' },
+      },
+      required: ['topic'],
+    },
+  },
+  {
+    name: 'topics',
+    description: '建议接下来值得摄入/深挖的主题(基于知识飞轮当前结构与热度)。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer', description: '返回条数(默认 5)' },
+      },
+    },
+  },
+  {
+    name: 'daily',
+    description: '今日简报:知识飞轮近 N 天的增长/发现摘要。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', description: '回看天数(默认 1)' },
+      },
+    },
+  },
+  {
+    name: 'gaps',
+    description: '知识缺口:近 N 天查询/使用中暴露但知识飞轮未覆盖的主题(驱动下一步摄入)。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', description: '统计窗口天数(默认 30)' },
+      },
+    },
+  },
 ];
 
 /** MCP 入参是 JSON 任意值,转 query 参数前先收窄类型(schema 已校验,这里是防御)。 */
@@ -103,6 +167,24 @@ async function handleTool(client: ApiClient, name: string, args: Record<string, 
       return client.get(`/relations/${encodeURIComponent(String(args.name))}`, { depth: num(args.depth, 1) });
     case 'stats':
       return client.get('/stats');
+    case 'review':
+      return client.get('/review', { limit: num(args.limit, 12) });
+    case 'review_mark': {
+      const rating = num(args.rating, 3);
+      if (rating < 1 || rating > 4) throw new Error('rating 必须是 1-4 (1=忘记 2=吃力 3=顺利 4=轻松)');
+      // /review/mark 用 query 参数(与 CLI review mark 同源)
+      return client.request('POST', '/review/mark', {
+        query: { name: str(args.name), rating },
+      });
+    }
+    case 'synthesize':
+      return client.post('/synthesize', { topic: str(args.topic), depth: num(args.depth, 2) }, { timeoutMs: opTimeout(300000) });
+    case 'topics':
+      return client.get('/suggest-topics', { count: num(args.count, 5) });
+    case 'daily':
+      return client.get('/daily-summary', { days: num(args.days, 1) });
+    case 'gaps':
+      return client.get('/knowledge-gaps', { days: num(args.days, 30) });
     default:
       throw new Error(`未知工具: ${name}`);
   }
