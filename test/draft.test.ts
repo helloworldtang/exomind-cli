@@ -145,6 +145,25 @@ describe('draft delete / update', () => {
 });
 
 describe('draft wechat 投递', () => {
+  test('正文是抱怨文 → 拒投,submit-wechat 不被调用(出口侧护栏)', async () => {
+    const cap = capture({
+      'GET /drafts/d1': { id: 'd1', title: '正经标题', content: '原文未提供。## 原文 下没有内容，无法做最小改动修正。' },
+    });
+    await assert.rejects(
+      () => draft(client(), { account: 'ailang', cover: 'ai' }, ['wechat', 'd1']),
+      /拒答抱怨文/,
+    );
+    assert.equal(cap.calls.some((c) => c.endsWith('/drafts/d1/submit-wechat')), false);
+  });
+
+  test('publish 正文是抱怨文 → 拒发', async () => {
+    const cap = capture({
+      'GET /drafts/d2': { id: 'd2', title: 't', content: '原文内容为空，请把需要润色的正文贴过来。' },
+    });
+    await assert.rejects(() => draft(client(), {}, ['publish', 'd2']), /拒答抱怨文/);
+    assert.equal(cap.calls.some((c) => c.endsWith('/drafts/d2/publish')), false);
+  });
+
   test('默认 cover=ai 透传给服务端', async () => {
     const cap = capturePost();
     await draft(client(), { account: 'ailang', cover: 'ai' }, ['wechat', 'd1']);

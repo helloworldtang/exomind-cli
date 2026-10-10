@@ -214,8 +214,21 @@ async function doDelete(client: ApiClient, opts: DraftOpts, id: string | undefin
   });
 }
 
+/** 出口侧拒答护栏(publish/wechat 共用):取正文,命中抱怨文模式即拒绝,不让废稿出库。 */
+async function guardRefusal(client: ApiClient, id: string, action: string): Promise<void> {
+  const d: Record<string, any> = await client.get(`/drafts/${encodeURIComponent(id)}`);
+  const content = String(d.content ?? '');
+  if (isRefusal(content)) {
+    throw new Error(
+      `草稿 ${id}「${d.title ?? ''}」正文是 LLM 拒答抱怨文(「原文为空/请粘贴」类),已拒绝 ${action}。` +
+        `正文开头: ${truncate(content, 60)} — 请先 draft update <id> --file 换正文`,
+    );
+  }
+}
+
 async function doPublish(client: ApiClient, id: string | undefined): Promise<void> {
   if (!id) throw new Error('请提供 draft id: exomind draft publish <id>');
+  await guardRefusal(client, id, 'publish');
   const r: Record<string, any> = await client.post(
     `/drafts/${encodeURIComponent(id)}/publish`,
     {},
@@ -231,6 +244,9 @@ async function doPublish(client: ApiClient, id: string | undefined): Promise<voi
 async function doWechat(client: ApiClient, opts: DraftOpts, id: string | undefined): Promise<void> {
   if (!id) throw new Error('请提供 draft id: exomind draft wechat <id> --account <号>');
   if (!opts.account) throw new Error('请提供 --account: exomind draft wechat <id> --account <公众号>');
+  // 投递前拒答护栏:存量抱怨文曾真实进过公众号草稿箱还排上群发队(2026-10 实录),
+  // 投递侧只看标题不看正文就是最后一个漏洞 —— 正文命中拒答模式直接拒投。
+  await guardRefusal(client, id, 'wechat');
   const r: Record<string, any> = await client.post(
     `/drafts/${encodeURIComponent(id)}/submit-wechat`,
     {
