@@ -253,8 +253,14 @@ program
 
 program
   .command('draft <action> [target...]')
-  .description('草稿: new <选题> 生成 / list 列表 / show <id> 看正文 / publish <id> 入库 / wechat <id> 投公众号')
+  .description(
+    '草稿: new <选题> 生成 / list / show <id> / update <id> 改标题或正文 / delete <id> 删除 / publish <id> 入库 / wechat <id> 投公众号。' +
+      'new 的选题串格式: 第一行=选题行,可附「## 原文」段(H2 标题+正文)作为写作素材',
+  )
   .option('--account <name>', '目标公众号(new/wechat)')
+  .option('--file <path>', 'new: 选题文件(可含 ## 原文 段,绕 argv 长度限制) / update: 新正文路径("-"=stdin)')
+  .option('--title <t>', 'update: 新标题')
+  .option('-y, --yes', 'delete: 跳过确认')
   .option('--status <s>', '状态过滤(list)')
   .option('-p, --page <n>', '页码(list)', '1')
   .option('-s, --size <n>', '每页(list)', '20')

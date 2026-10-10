@@ -167,6 +167,10 @@ export class ApiClient {
     return this.request('POST', p, { ...opts, body });
   }
 
+  put(p: string, body?: unknown, opts?: Omit<RequestOptions, 'body' | 'query'>): Promise<any> {
+    return this.request('PUT', p, { ...opts, body });
+  }
+
   del(p: string, opts?: Omit<RequestOptions, 'query' | 'body'>): Promise<any> {
     return this.request('DELETE', p, opts);
   }
