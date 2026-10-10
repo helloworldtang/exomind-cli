@@ -61,6 +61,31 @@ describe('draft new 生成/落库护栏', () => {
     assert.equal(cap.calls.some((c) => c === 'POST https://x.test/drafts'), false);
   });
 
+  // 以下变体全部来自 2026-10 清理存量废稿时的真实样本(26 份抱怨文,窄正则只拦得住 3 份)
+  test('拒答变体「原文未提供」被拦(长度+关键词判据)', async () => {
+    const cap = capture({
+      'POST /generate-draft': { draft: '原文未提供。 `## 原文` 下没有内容，无法做最小改动修正。' },
+    });
+    await assert.rejects(() => draft(client(), {}, ['new', '某选题']), /拒答/);
+    assert.equal(cap.calls.some((c) => c === 'POST https://x.test/drafts'), false);
+  });
+
+  test('拒答变体「原文好像没有贴上来」被拦', async () => {
+    const cap = capture({
+      'POST /generate-draft': { draft: '原文好像没有贴上来——你这里"## 原文"下面是空的，我没法直接改。' },
+    });
+    await assert.rejects(() => draft(client(), {}, ['new', '某选题']), /拒答/);
+  });
+
+  test('长正文提及「原文/正文」不误杀(400 字硬上限)', async () => {
+    const long = '这是一篇真正的长文章,虽然正文里提到原文两个字。'.repeat(30); // ~1000 字
+    const cap = capture({
+      'POST /generate-draft': { draft: `# 标题\n\n${long}`, title_candidates: ['标题'] },
+    });
+    await draft(client(), {}, ['new', '某选题']);
+    assert.equal(cap.calls.some((c) => c === 'POST https://x.test/drafts'), true);
+  });
+
   test('「## 原文」段空 → 预检失败,不调 /generate-draft(省 LLM 调用)', async () => {
     const cap = capture();
     await assert.rejects(
@@ -72,7 +97,7 @@ describe('draft new 生成/落库护栏', () => {
 
   test('「## 原文」段有正文 → 正常透传 topic 且落库', async () => {
     const cap = capture({
-      'POST /generate-draft': { draft: '# 标题\n\n正文', title_candidates: ['标题'] },
+      'POST /generate-draft': { draft: `# 标题\n\n${'这是一篇够长的正文,过得了拒答长度判据。'.repeat(30)}`, title_candidates: ['标题'] },
     });
     await draft(client(), {}, ['new', '选题行\n## 原文\n这是原文内容,足够长。']);
     const gen = cap.calls.find((c) => c.startsWith('POST https://x.test/generate-draft'));
@@ -83,7 +108,7 @@ describe('draft new 生成/落库护栏', () => {
 
   test('--file 读选题文件(绕 argv 限制)', async () => {
     const cap = capture({
-      'POST /generate-draft': { draft: '# 标题\n\n正文' },
+      'POST /generate-draft': { draft: `# 标题\n\n${'这是一篇够长的正文,过得了拒答长度判据。'.repeat(30)}` },
     });
     const f = tmpFile('文件选题行\n## 原文\n文件里的原文素材。');
     await draft(client(), { file: f }, ['new']);

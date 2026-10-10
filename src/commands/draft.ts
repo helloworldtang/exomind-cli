@@ -12,8 +12,15 @@ import * as readline from 'node:readline/promises';
 
 type DraftOpts = Record<string, any>; // commander opts(宽松,内部按需取)
 
-/** LLM 拒答特征(把「原文缺失」当正文返回的抱怨文)。命中即废弃,不落库。 */
-const REFUSAL_RE = /原文为空|未提供原文|请粘贴|无法(读|找|获取)到?原文/;
+/** LLM 拒答检测(把「原文缺失」当正文返回的抱怨文)。命中即废弃,不落库。
+ *  实测 26 份抱怨文(2026-10 清理存量)措辞千变万化——原文为空/原文未提供/原文内容为空/
+ *  请提供原文/原文好像没有贴上来/未读取到需要润色的正文…——正则穷举只拦得住 3/26。
+ *  硬判据:抱怨文全在 300 字内(最长 297),真文章按号调性 1500+ 字;400 字一刀切 +
+ *  关键词,误杀面可忽略(400 字内的真稿本身就过不了自检)。 */
+function isRefusal(content: string): boolean {
+  if (content.replace(/\s/g, '').length >= 400) return false;
+  return /原文|粘贴|润色|正文/.test(content);
+}
 
 interface SourceSection {
   /** 选题行(首行,用于诊断回显) */
@@ -96,7 +103,7 @@ async function doNew(client: ApiClient, opts: DraftOpts, args: string[]): Promis
 
   // 1.5 拒答检测:LLM 把「原文为空,请粘贴正文」当正文返回时绝不落库
   //     (此前只判 !content,抱怨文被保存成废稿且删不掉)。
-  if (REFUSAL_RE.test(content)) {
+  if (isRefusal(content)) {
     throw new Error(`生成失败:LLM 判定原文缺失(拒答),草稿未保存。返回内容: ${truncate(content, 120)}`);
   }
 
