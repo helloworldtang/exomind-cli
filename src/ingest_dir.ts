@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ApiClient } from './api';
 import { opTimeout, ApiError, isTransientError } from './api';
-import { sha256, loadManifest, saveManifest, cleanupStale, recordFile, acquireManifestLock, type Manifest } from './manifest';
+import { sha256, deriveClientKey, loadManifest, saveManifest, cleanupStale, recordFile, acquireManifestLock, type Manifest } from './manifest';
 import { invalidateKeywordCache } from './config';
 import { readFileText } from './io';
 import { spoolEntry } from './spool';
@@ -267,7 +267,8 @@ export async function submitAndTrack(
     try {
       const res = await ingestWithRetry(
         client,
-        { content: f.content, title: f.title, tags: f.tags ?? opts.tag },
+        // client_key=内容哈希派生:drain 补投/重试同 key,吃服务端第一跳复用(b85e5cf)
+        { content: f.content, title: f.title, tags: f.tags ?? opts.tag, client_key: deriveClientKey(f.hash) },
         30000,
         '/ingest/async',
       );

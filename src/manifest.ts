@@ -24,6 +24,13 @@ export function sha256(s: string): string {
   return crypto.createHash('sha256').update(s, 'utf-8').digest('hex');
 }
 
+/** 提交幂等键(服务端 b85e5cf 两层幂等的第一层):cli- + 种子哈希前 44 位,
+ *  总长 48 合法(8~64 [A-Za-z0-9_-])。同种子稳定派生——同内容重试/重投得到同 key,
+ *  服务端第一跳复用已有 job,网络错误重投不再产生重复。 */
+export function deriveClientKey(seed: string): string {
+  return `cli-${sha256(seed).slice(0, 44)}`;
+}
+
 export function loadManifest(): Manifest {
   try {
     const d = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf-8'));

@@ -34,6 +34,7 @@ import trash from './commands/trash';
 import backfill from './commands/backfill';
 import drain from './commands/drain';
 import handoff from './commands/handoff';
+import sessionCompile from './commands/session_compile';
 import installCmd from './commands/install';
 import doctor from './commands/doctor';
 
@@ -167,6 +168,15 @@ program
   .action(run(drain));
 
 // ── 会话接力(P3)──
+// L2 消费入口(薄版):会话要点精炼归档,自动挂当前项目最近会话
+program
+  .command('session-compile [text...]')
+  .description('L2 会话精炼: 把会话要点经 ingest 管线入库,挂到当前项目最近会话(项目时间线)')
+  .option('-t, --title <title>', '标题(可选)')
+  .option('--session <key>', '显式 session_key(缺省自动挂最近会话)')
+  .option('--cwd <path>', '项目目录(缺省当前目录)')
+  .action(run(sessionCompile));
+
 program
   .command('handoff [project...]')
   .description('接力: 不带参数=认领当前项目的接力包;指定项目名=跨项目显式认领;--note=手动创建')

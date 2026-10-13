@@ -14,6 +14,7 @@ import type { ApiClient } from './api';
 import { CACHE_DIR, resolveConfig } from './config';
 import { readStdin } from './io';
 import { resolveProjectKey } from './project_key';
+import { replayUnreported } from './hook_session_end';
 
 const REQUEST_TIMEOUT_MS = 4000; // 会话启动预算:比 prompt hook 宽,但仍要快
 
@@ -86,7 +87,15 @@ export async function runSessionStartHook(client: ApiClient): Promise<void> {
 export async function runSessionStartStandalone(): Promise<void> {
   try {
     const { ApiClient } = await import('./api');
-    await runSessionStartHook(new ApiClient(resolveConfig()));
+    const client = new ApiClient(resolveConfig());
+    // R30-4 漏报补报:会话启动时先补投历史未上报事件(≤10 条/次,静默),
+    // 再做本会话的接力请求。服务端幂等,补投重复无害。
+    try {
+      await replayUnreported(client);
+    } catch {
+      /* 补报失败不阻塞接力 */
+    }
+    await runSessionStartHook(client);
   } catch {
     /* ignore */
   }

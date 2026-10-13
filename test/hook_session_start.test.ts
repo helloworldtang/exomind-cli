@@ -111,3 +111,60 @@ describe('handoff 命令:项目短名解析', () => {
     assert.equal(matchProjectKey('不存在', known), null);
   });
 });
+
+describe('client_key 提交幂等(deriveClientKey)', () => {
+  test('同种子稳定/格式合法(8~64 [A-Za-z0-9_-])/不同种子不同', async () => {
+    const { deriveClientKey } = await import('../src/manifest');
+    const k1 = deriveClientKey('abc');
+    assert.equal(k1, deriveClientKey('abc'), '同种子稳定(drain 重投同 key)');
+    assert.notEqual(k1, deriveClientKey('abd'));
+    assert.match(k1, /^cli-[a-f0-9]{44}$/);
+    assert.ok(k1.length >= 8 && k1.length <= 64, `长度 ${k1.length} 合法`);
+  });
+});
+
+describe('R30-4 漏报补报(reported 标记与补投)', () => {
+  test('loadUnreported: 排除已上报/超龄/无 session_id;同 key 去重取最新', async () => {
+    const se2 = await import('../src/hook_session_end');
+    fs.rmSync(path.join(TMP, '.exomind', 'sessions'), { recursive: true, force: true });
+    // 重新指向 HOME 下的 sessions(TMP 即 HOME)
+    const dir = path.join(TMP, '.exomind', 'sessions');
+    fs.mkdirSync(dir, { recursive: true });
+    const mk = (ts: string, sid: string, source = 'claude') =>
+      JSON.stringify({ ts, source, session_id: sid, cwd: '/tmp' });
+    fs.writeFileSync(
+      path.join(dir, 'events.jsonl'),
+      [
+        mk('2026-10-01T00:00:00Z', 'old'), // 超龄(>7 天,相对测试运行时)
+        mk(new Date().toISOString(), 'fresh-1'),
+        mk(new Date().toISOString(), 'fresh-1'), // 同 key 重复 → 去重
+        mk(new Date().toISOString(), 'fresh-2'),
+        JSON.stringify({ ts: new Date().toISOString(), source: 'claude' }), // 无 session_id → 排除
+      ].join('\n') + '\n',
+    );
+    const un = se2.loadUnreported(7);
+    assert.equal(un.length, 2, `应只剩 2 条(实际 ${un.length})`);
+    assert.ok(un.every((e) => e.session_id!.startsWith('fresh-')));
+    // 标记后清零
+    se2.markReported(un[0]);
+    const un2 = se2.loadUnreported(7);
+    assert.equal(un2.length, 1);
+  });
+
+  test('replayUnreported: 逐条 POST,成功即标记', async () => {
+    const se2 = await import('../src/hook_session_end');
+    fs.rmSync(path.join(TMP, '.exomind', 'sessions'), { recursive: true, force: true });
+    se2.appendEvent(se2.normalizeEvent(JSON.stringify({ session_id: 'rp-1', cwd: '/tmp' }), 'claude'));
+    let posted = 0;
+    const fake = {
+      post: async () => {
+        posted++;
+        return {};
+      },
+    };
+    const n = await se2.replayUnreported(fake);
+    assert.equal(n, 1);
+    assert.equal(posted, 1);
+    assert.equal(se2.loadUnreported(7).length, 0, '补投成功后不再出现在候选');
+  });
+});

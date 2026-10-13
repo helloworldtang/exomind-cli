@@ -4,7 +4,7 @@ import { opTimeout, type ApiClient } from '../api';
 import { output, ok, green, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
 import { runDirIngestest, ingestWithRetry } from '../ingest_dir';
-import { loadManifest, saveManifest, recordFile, acquireManifestLock } from '../manifest';
+import { loadManifest, saveManifest, recordFile, acquireManifestLock, deriveClientKey, sha256 } from '../manifest';
 
 /** 解析 --dir 的目录路径。容忍两种写法:
  *  - `ingest --dir <目录>`(文档写法,commander 直接给 string)
@@ -67,6 +67,7 @@ export default async function ingest(
     if (opts.title) fastBody.title = opts.title;
     if (opts.tag && opts.tag.length) fastBody.tags = opts.tag;
     if (opts.origin) fastBody.origin = opts.origin; // R24 前置:hook-auto 打标透传
+    fastBody.client_key = deriveClientKey(sha256(content)); // 提交幂等:超时重发不二次入队
     const result = await ingestWithRetry(client, fastBody, opTimeout(30000), '/ingest/async');
     if (fileAbs && fileRaw !== null) {
       const release = acquireManifestLock(); // 与并发 --dir 互斥(尽力而为,拿不到锁照写)
@@ -95,6 +96,7 @@ export default async function ingest(
   if (opts.origin) body.origin = opts.origin; // R24 前置:hook-auto 打标透传
 
   hint('⏳ 摄入中: 服务器用 LLM 抽取实体/关系,长内容可能 1-3 分钟…');
+  body.client_key = deriveClientKey(sha256(content)); // 提交幂等:超时重发不二次入队
   const result = await ingestWithRetry(client, body, opTimeout(300000));
 
   // --file 摄入记录 manifest(与 --dir 共用同一份,保证跨模式判重:--file 摄过的文件,--dir 会跳过)
