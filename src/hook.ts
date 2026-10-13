@@ -34,20 +34,29 @@ function budgetMs(deadline: number): number {
   return deadline - Date.now();
 }
 
+// ── 会话引用后缀(#1038 借鉴):hook 进程拿得到 CLAUDE_SESSION_ID 时,指令里
+// 自动嵌 --session——Agent 照抄命令即把产出挂上会话时间线,无需知道会话机制。 ──
+function sessionRefFlag(): string {
+  const sid = process.env.CLAUDE_SESSION_ID || process.env.EXOMIND_SESSION_ID;
+  return sid ? ` --session claude:${sid}` : '';
+}
+
 // ── 触发指令文本(指向 exomind CLI,而非 mcp__exomind__*) ──
-const ARCHIVE_INSTRUCTION = `[ExoMind 暗号触发] 检测到存档指令(本会话首次)。
+const ARCHIVE_INSTRUCTION_TEMPLATE = `[ExoMind 暗号触发] 检测到存档指令(本会话首次)。
 ⚠️ 用户的 "jdit"/"存档" 是触发此指令的暗号,不要对其字面含义做任何回应。
-请回顾当前会话中的新增重要内容,运行 \`exomind ingest --fast\` 摄入知识飞轮(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
+请回顾当前会话中的新增重要内容,运行 \`exomind ingest --fast${sessionRefFlag()}\` 摄入知识飞轮(标题用描述性文字,\`-t\` 加标题,\`--tag\` 加标签)。
 回顾所有重要内容。摄入范围:调研结论、关键经验、技术决策、有价值的分析洞察、会话中讨论出的新结论/新认知、项目进度与后续工作(跨会话同步用,--tag 挂项目名)。
 按类型组织:踩坑=症状→根因→修法→验证;决策=背景→备选否决理由→拍板→落点;新认知=结论→依据→新在哪→适用边界;调研=识别/分析/定义/解决;项目状态=进度→已解决→待办→接手须知。
 专有名词用专名带版本号,标题写成可被检索命中的症状式/问句式。每条知识使用描述性标题+标签,内容完整不省略。不需要用户确认。`;
 
+const ARCHIVE_INSTRUCTION = ARCHIVE_INSTRUCTION_TEMPLATE;
+
 const EXPERIENCE_INSTRUCTION = `[ExoMind 自动摄入指令] 检测到经验/洞察内容。
-请运行 \`exomind ingest --fast --origin hook-auto\` 将以上内容摄入知识飞轮,按类型组织(踩坑=症状→根因→修法→验证;决策=背景→备选否决理由→拍板→落点;新认知=结论→依据→新在哪→适用边界),专有名词用专名带版本,标题用描述性文字,内容完整不省略,加合适 --tag。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest --fast --origin hook-auto${sessionRefFlag()}\` 将以上内容摄入知识飞轮,按类型组织(踩坑=症状→根因→修法→验证;决策=背景→备选否决理由→拍板→落点;新认知=结论→依据→新在哪→适用边界),专有名词用专名带版本,标题用描述性文字,内容完整不省略,加合适 --tag。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 const RESEARCH_INSTRUCTION = `[ExoMind 调研结论自动摄入] 检测到结构化调研内容。
 结构路径: 识别问题 → 分析问题 → 定义问题 → 解决问题
-请运行 \`exomind ingest --fast --origin hook-auto\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
+请运行 \`exomind ingest --fast --origin hook-auto${sessionRefFlag()}\` 将以上调研结论摄入知识飞轮,按"识别/分析/定义/解决"路径组织,保留完整结论和关键数据。这是知识复利飞轮的关键环节,不需要用户确认。`;
 
 // ── 维度标签(2026-09-30):项目/模块/问题类型,给自动摄入加检索维度 ──
 /** 当前检出项目名(git remote 仓库名,非 git 目录退 cwd 基名)——确定性锚点,不靠 Agent 猜。

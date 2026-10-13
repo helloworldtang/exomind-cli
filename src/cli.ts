@@ -130,6 +130,7 @@ program
   .option('--file <path>', '从文件读取内容')
   .option('--fast', '快速模式: 原文秒存并可立即被检索,实体/关系抽取转后台(适合 Agent 自动存档)')
   .option('--origin <tag>', '来源打标(服务端记入 ingest_log.source;hook 自动摄入传 hook-auto)')
+  .option('--session <key>', '会话引用(挂到会话时间线;hook 指令自动带 claude:<会话id>)')
   .option('--dir [path]', '目录批量摄入(增量: 内容哈希跳过未变文件;目录可写在前: ingest <目录> --dir)')
   .option('-r, --recursive', '递归子目录(配合 --dir)')
   .option('--pattern <glob>', '文件名匹配,默认 *.md', '*.md')
