@@ -17,6 +17,7 @@ npm 发布由 **GitHub Action 在收到 tag 时触发** `npm publish`。**只 pu
 - tag 首次 push 偶发 GitHub 443 超时,重试 `git push origin vX.Y.Z` 即过。
 - **改了发布工作流或 `scripts/preflight.mjs` 后,用 Actions 页面 dispatch「Release」+ `dry_run=true` 试跑**(只构建 + 自检,不发布)。同版本重发必然 403,拿真版本试等于「改坏了也测不出来」;试跑后确认「发布到 npm / 确认版本已在 registry 可见 / 建 GitHub Release」三步为 skipped。
 - 本机可先跑自检:`npm run build && node scripts/preflight.mjs --skip-registry`(补 `--allow-published` 时,已发布版本只提示不报错)。
+- **加/改命令或选项后,发版前到 manager 仓跑镜像护栏**(2026-10-14 教训入册):`cd ../myExoMindManager && .venv/bin/python -m pytest tests/test_client_contract.py tests/test_public_pages_consistency.py -q`。两份镜像清单(端点/子命令/选项)只在服务端仓,CLI 单仓测试全绿不代表契约同步——v0.27.0/v0.28.0 连续两次被咬。
 - **commit message 不加 Co-Authored-By**(全局规则)。
 
 ## 构建 / 测试 / 本地试用
