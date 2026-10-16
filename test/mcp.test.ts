@@ -192,3 +192,89 @@ describe('mcp: tools/call', () => {
     assert.match(r.result.content[0].text, /401|bad key/);
   });
 });
+
+describe('mcp: ingest 异步化(2026-10-16 响应丢失事故修复)', () => {
+  afterEach(() => {
+    global.fetch = origFetch;
+  });
+
+  /** mockFetch 的序列版:按调用次序返回预设响应(供 async→poll 链路)。 */
+  function mockFetchSeq(
+    steps: { match: RegExp; body: unknown }[],
+  ): { urls: string[]; bodies: string[] } {
+    const seen = { urls: [] as string[], bodies: [] as string[] };
+    let i = 0;
+    global.fetch = ((url: string, init?: RequestInit) => {
+      seen.urls.push(url);
+      if (init?.body) seen.bodies.push(String(init.body));
+      const step = steps[Math.min(i, steps.length - 1)];
+      i++;
+      if (!step || !step.match.test(url)) {
+        return Promise.resolve({ ok: false, status: 599, statusText: 'no mock', text: async () => '' });
+      }
+      return Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(step.body) });
+    }) as typeof fetch;
+    return seen;
+  }
+
+  test('ingest 走 /ingest/async + 轮询到 done,不再同步 POST /ingest', async () => {
+    const seen = mockFetchSeq([
+      { match: /\/ingest\/async$/, body: { job_id: 42, status: 'pending' } },
+      { match: /\/ingest\/status/, body: { job_id: 42, status: 'running' } },
+      { match: /\/ingest\/status/, body: { job_id: 42, status: 'done', entities: 3, concepts: 2, summary: 's', created_pages: ['A'], updated_pages: ['B'], extracted: true } },
+    ]);
+    const r = await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/call',
+      params: { name: 'ingest', arguments: { content: 'hello 世界', title: 'T', tags: ['x'] } },
+    });
+    const text = (r as { result: { content: { text: string }[] } }).result.content[0].text;
+    const data = JSON.parse(text);
+    assert.equal(data.job_id, 42);
+    assert.equal(data.entities, 3);
+    assert.equal(data.concepts, 2);
+    // 提交走 async 端点且带 client_key(超时重发不二次入队)
+    assert.match(seen.urls[0], /\/ingest\/async$/);
+    assert.ok(!seen.urls.some((u) => /\/ingest$/.test(u.replace(/^[^/]+\/\/[^/]+/, ''))), '不得再同步 POST /ingest');
+    const submitted = JSON.parse(seen.bodies[0]);
+    assert.equal(submitted.content, 'hello 世界');
+    assert.equal(submitted.title, 'T');
+    assert.match(submitted.client_key, /^cli-[A-Za-z0-9_-]{44}$/);
+    // 轮询到终态
+    assert.ok(seen.urls.some((u) => u.includes('/ingest/status') && u.includes('job_id=42')));
+  });
+
+  test('job failed → isError 带错误与 job_id', async () => {
+    mockFetchSeq([
+      { match: /\/ingest\/async$/, body: { job_id: 7, status: 'pending' } },
+      { match: /\/ingest\/status/, body: { job_id: 7, status: 'failed', error: 'LLM 不可用' } },
+    ]);
+    const r = (await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'tools/call',
+      params: { name: 'ingest', arguments: { content: 'x' } },
+    })) as { result: { isError: boolean; content: { text: string }[] } };
+    assert.equal(r.result.isError, true);
+    assert.match(r.result.content[0].text, /LLM 不可用/);
+    assert.match(r.result.content[0].text, /job_id=7/);
+  });
+
+  test('dedup 复用(弱网重试同 client_key)照常轮询出结果', async () => {
+    const seen = mockFetchSeq([
+      { match: /\/ingest\/async$/, body: { job_id: 9, status: 'done', dedup: 'recent' } },
+      { match: /\/ingest\/status/, body: { job_id: 9, status: 'done', entities: 1, concepts: 0 } },
+    ]);
+    const r = await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 22,
+      method: 'tools/call',
+      params: { name: 'ingest', arguments: { content: 'same' } },
+    });
+    const data = JSON.parse((r as { result: { content: { text: string }[] } }).result.content[0].text);
+    assert.equal(data.entities, 1);
+    assert.equal(data.dedup, 'recent');
+    assert.ok(seen.urls.some((u) => u.includes('job_id=9')));
+  });
+});

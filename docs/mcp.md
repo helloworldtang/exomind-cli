@@ -51,7 +51,7 @@ openclaw mcp add exomind --command <emcli绝对路径> --arg mcp
 
 | 工具 | 参数 | 对应 |
 |---|---|---|
-| `ingest` | content, title?, tags? | POST /ingest |
+| `ingest` | content, title?, tags? | POST /ingest/async + 轮询 /ingest/status(v0.29 起,免疫响应丢失) |
 | `query` | question, tags? | POST /query |
 | `search` | keyword, limit? | GET /search |
 | `entity` | name | GET /entities/{name} |

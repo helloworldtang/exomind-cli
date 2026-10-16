@@ -8,6 +8,8 @@
 import * as readline from 'node:readline';
 import pkg from '../package.json' assert { type: 'json' };
 import { ApiClient, opTimeout } from './api';
+import { ingestWithRetry, retryWith429 } from './ingest_dir';
+import { sha256, deriveClientKey } from './manifest';
 
 const PROTOCOL_VERSION = '2024-11-05';
 
@@ -152,11 +154,70 @@ function num(v: unknown, dflt: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : dflt;
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** MCP ingest:走 /ingest/async 秒回 job_id + 轮询 /ingest/status 到终态。
+ *  不再同步 POST /ingest(2026-10-16 事故:服务端 52s 完成 200,响应在路上丢失,
+ *  客户端干等满超时报 failed,Agent 误判"摄入失败"可能重摄造成重复页)。
+ *  异步轮询天然免疫单向丢包:提交响应丢了 → 同 client_key 重发复用 job;
+ *  状态响应丢了 → 下一轮重查。client_key 同步路径也带(与 CLI 单条摄入一致)。 */
+async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Promise<unknown> {
+  const content = str(args.content) ?? '';
+  if (!content.trim()) throw new Error('content 不能为空');
+  const payload: Record<string, unknown> = { content };
+  if (args.title) payload.title = str(args.title);
+  if (Array.isArray(args.tags) && args.tags.length) payload.tags = args.tags;
+  payload.client_key = deriveClientKey(sha256(content)); // 提交幂等:超时重发不二次入队
+
+  const submit = await ingestWithRetry(client, payload, opTimeout(30000), '/ingest/async');
+  const jobId = submit.job_id;
+
+  const deadline = Date.now() + opTimeout(600000); // 轮询总预算 10min(EXOMIND_TIMEOUT_MS 可覆盖)
+  while (true) {
+    let s: any;
+    try {
+      s = await retryWith429(() => client.get('/ingest/status', { job_id: jobId }));
+    } catch (e) {
+      // 单轮状态查询失败不致命(网络抖动);预算内继续轮询,超预算才放弃
+      if (Date.now() > deadline) {
+        throw new Error(
+          `状态查询连续失败(job_id=${jobId}): ${e instanceof Error ? e.message : String(e)}。` +
+            '任务已提交,可能仍在后台处理——稍后重查,勿盲目重投',
+        );
+      }
+      await sleep(2000);
+      continue;
+    }
+    if (s.status === 'done') {
+      return {
+        job_id: jobId,
+        entities: s.entities ?? 0,
+        concepts: s.concepts ?? 0,
+        summary: s.summary ?? '',
+        created_pages: s.created_pages ?? [],
+        updated_pages: s.updated_pages ?? [],
+        extracted: s.extracted ?? true,
+        ...(submit.dedup ? { dedup: submit.dedup } : {}),
+      };
+    }
+    if (s.status === 'failed') {
+      throw new Error(`摄入失败: ${s.error || '未知错误'} (job_id=${jobId})`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `轮询超时: job_id=${jobId} 仍在 ${s.status}。任务已提交服务器继续处理,` +
+          '稍后可重查 /ingest/status,勿盲目重投',
+      );
+    }
+    await sleep(2000);
+  }
+}
+
 /** 单个工具的执行(复用 ApiClient,走与 CLI 完全相同的 REST)。 */
 async function handleTool(client: ApiClient, name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case 'ingest':
-      return client.post('/ingest', args, { timeoutMs: opTimeout(300000) });
+      return mcpIngest(client, args);
     case 'query':
       return client.post('/query', args, { timeoutMs: opTimeout(180000) });
     case 'search':

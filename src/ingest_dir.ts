@@ -178,6 +178,45 @@ export async function ingestWithRetry(
   }
 }
 
+/** 预估摄入后的服务端标题(与 exo/sources/text.py pick_default_title 同源):
+ *  --title 优先;否则前 5 行内首个非空行,剥行首 markdown 噪声,截 80 字符。
+ *  供超时回查 /ingest/recent 时按标题对账。 */
+export function expectedTitles(title: string | undefined, content: string): string[] {
+  const out = new Set<string>();
+  if (title?.trim()) return [title.trim()]; // 带 title 时服务端只记 title,多候选反会误命中
+  for (const line of content.split('\n').slice(0, 5)) {
+    const cleaned = line.replace(/^[#>*\-–—`=|~\s]+/u, '').trim();
+    if (cleaned) {
+      out.add(cleaned.slice(0, 80));
+      break;
+    }
+  }
+  return [...out];
+}
+
+/** 超时后回查「最近存入」:响应在路上丢失时摄入可能早已成功(2026-10-16 事故:
+ *  服务端 52s 返回 200,客户端没收到,干等满超时误报失败)。
+ *  命中(标题吻合 + 时间晚于提交 - 60s 钟差容忍 + 非消化中/失败)返回该条目,
+ *  未命中/回查自身失败返回 null——回查失败不放大错误,按原超时抛出。 */
+export async function verifyIngestRecent(
+  client: ApiClient,
+  expected: string[],
+  startedAtMs: number,
+): Promise<any | null> {
+  try {
+    const r = await client.get('/ingest/recent', { limit: 20 });
+    for (const it of r?.items ?? []) {
+      if (!it?.title || it.status === 'digesting' || it.status === 'failed') continue;
+      const ts = Date.parse(it.timestamp ?? '');
+      if (!Number.isFinite(ts) || ts < startedAtMs - 60_000) continue;
+      if (expected.includes(String(it.title).trim())) return it;
+    }
+  } catch {
+    /* 回查失败不放大:调用方按原超时错误抛出 */
+  }
+  return null;
+}
+
 /** 429 限流退避重试(Retry-After 秒级,上限 60s,默认 3 次)。
  *  与 retryTransient(502/503/504/网络)互补:限流是"稍等再来"不是瞬时故障。
  *  曾经 poll/query/search 撞 429 直接抛,--dir 轮询循环吞错后 2s 一轮

@@ -1,11 +1,11 @@
 import './_setup_cache';
-import { describe, test, before } from 'node:test';
+import { describe, test, before, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { recordFile, type Manifest } from '../src/manifest';
-import { ApiError } from '../src/api';
+import { ApiError, ApiClient } from '../src/api';
 
 type Mod = typeof import('../src/ingest_dir');
 let id!: Mod;
@@ -260,5 +260,49 @@ describe('retryWith429(限流退避,风暴根治)', () => {
     const fake = { fn: async () => { if (++calls === 1) throw new ApiError(429, '限流'); return 2; } };
     const r = await id.retryWith429(fake.fn);
     assert.equal(r, 2);
+  });
+});
+
+describe('超时回查(expectedTitles / verifyIngestRecent,2026-10-16 响应丢失事故)', () => {
+  const origFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = origFetch;
+  });
+  const apiClient = () => new ApiClient({ base_url: 'https://x.test', api_key: 'k' });
+
+  test('expectedTitles: --title 优先;无 title 剥行首 markdown 取首个非空行,截 80', () => {
+    assert.deepEqual(id.expectedTitles('我的标题', '任意正文'), ['我的标题']);
+    assert.deepEqual(id.expectedTitles(undefined, '# 故事主线写作法\n正文'), ['故事主线写作法']);
+    assert.deepEqual(id.expectedTitles(undefined, '##  前后空行\n\n正文'), ['前后空行']);
+    // 前 5 行全空/纯符号 → 无候选(不误报命中)
+    assert.deepEqual(id.expectedTitles(undefined, '\n\n\n\n\n第六行才有'), []);
+    const long = 'x'.repeat(120);
+    assert.equal(id.expectedTitles(undefined, long)[0].length, 80);
+  });
+
+  test('verifyIngestRecent: 标题吻合 + 时间晚于提交 → 命中', async () => {
+    const started = Date.now() - 1000;
+    const item = { title: '故事主线写作法', status: 'done', entities: 8, timestamp: new Date(started + 500).toISOString() };
+    global.fetch = (async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ items: [{ title: '别的', status: 'done', entities: 1, timestamp: new Date(started + 400).toISOString() }, item] }) })) as typeof fetch;
+    const hit = await id.verifyIngestRecent(apiClient(), ['故事主线写作法'], started);
+    assert.ok(hit);
+    assert.equal(hit.entities, 8);
+  });
+
+  test('verifyIngestRecent: 消化中/失败/旧记录/标题不符 → null', async () => {
+    const started = Date.now() - 1000;
+    const items = [
+      { title: '故事主线写作法', status: 'digesting', timestamp: new Date(started + 500).toISOString() },
+      { title: '故事主线写作法', status: 'failed', timestamp: new Date(started + 500).toISOString() },
+      { title: '故事主线写作法', status: 'done', timestamp: new Date(started - 120_000).toISOString() },
+      { title: '完全另一篇', status: 'done', timestamp: new Date(started + 500).toISOString() },
+    ];
+    global.fetch = (async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ items }) })) as typeof fetch;
+    assert.equal(await id.verifyIngestRecent(apiClient(), ['故事主线写作法'], started), null);
+  });
+
+  test('verifyIngestRecent: 回查自身网络失败 → null 不抛(不放大错误)', async () => {
+    global.fetch = (async () => { throw new Error('网络断了'); }) as typeof fetch;
+    assert.equal(await id.verifyIngestRecent(apiClient(), ['x'], Date.now() - 1000), null);
   });
 });

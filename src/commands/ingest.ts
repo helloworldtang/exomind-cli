@@ -1,9 +1,9 @@
 /** exomind ingest — 导入知识。支持参数 / stdin / 文件。 */
 import * as path from 'node:path';
-import { opTimeout, type ApiClient } from '../api';
-import { output, ok, green, dim, truncate, hint } from '../format';
+import { opTimeout, ApiError, type ApiClient } from '../api';
+import { output, ok, green, red, dim, truncate, hint } from '../format';
 import { readStdin, readStdinForced, readFileText } from '../io';
-import { runDirIngestest, ingestWithRetry } from '../ingest_dir';
+import { runDirIngestest, ingestWithRetry, expectedTitles, verifyIngestRecent } from '../ingest_dir';
 import { loadManifest, saveManifest, recordFile, acquireManifestLock, deriveClientKey, sha256 } from '../manifest';
 
 /** 解析 --dir 的目录路径。容忍两种写法:
@@ -100,7 +100,34 @@ export default async function ingest(
 
   hint('⏳ 摄入中: 服务器用 LLM 抽取实体/关系,长内容可能 1-3 分钟…');
   body.client_key = deriveClientKey(sha256(content)); // 提交幂等:超时重发不二次入队
-  const result = await ingestWithRetry(client, body, opTimeout(300000));
+  const startedAt = Date.now();
+  let result: any;
+  let verifiedAfterTimeout = false;
+  try {
+    result = await ingestWithRetry(client, body, opTimeout(300000));
+  } catch (e) {
+    // 客户端超时 ≠ 摄入失败:响应可能在路上丢失而服务端早已成功(2026-10-16 事故)。
+    // 先回查「最近存入」对账,命中按成功处理,避免误报失败诱发重摄重复页。
+    if (e instanceof ApiError && e.status === 0 && e.timedOut) {
+      const hit = await verifyIngestRecent(client, expectedTitles(opts.title, content), startedAt);
+      if (hit) {
+        result = {
+          entities: hit.entities ?? 0,
+          concepts: hit.concepts ?? 0,
+          summary: '',
+          created_pages: hit.created_pages ?? [],
+          updated_pages: hit.updated_pages ?? [],
+        };
+        verifiedAfterTimeout = true;
+      } else {
+        process.stderr.write(
+          red('  ✗ 请求超时且回查「最近存入」未见本条记录。\n') +
+            dim('  长内容 LLM 抽取可到数分钟,任务可能仍在服务器处理;先 `exomind search "关键词"` 确认,勿立即重试以免重复。\n'),
+        );
+      }
+    }
+    if (!verifiedAfterTimeout) throw e;
+  }
 
   // --file 摄入记录 manifest(与 --dir 共用同一份,保证跨模式判重:--file 摄过的文件,--dir 会跳过)
   if (fileAbs && fileRaw !== null) {
@@ -116,6 +143,9 @@ export default async function ingest(
 
   output(result, () => {
     console.log(ok('已导入服务器知识飞轮'));
+    if (verifiedAfterTimeout) {
+      console.log(dim('  ⚠ 本次请求超时,但回查「最近存入」确认已入库——请勿重试,以免重复'));
+    }
     if (opts.title) console.log(dim(`  标题: ${opts.title}`));
     console.log(`  ${green('实体')}: ${result.entities ?? 0}   ${green('概念')}: ${result.concepts ?? 0}`);
     if (result.summary) console.log(dim(`  摘要: ${truncate(result.summary, 120)}`));
