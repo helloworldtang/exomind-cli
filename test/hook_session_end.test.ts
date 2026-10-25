@@ -54,4 +54,40 @@ describe('hook-session-end(采集探针)', () => {
     assert.equal(lines.length, 2);
     assert.equal(JSON.parse(lines[1]).session_id, 's2');
   });
+
+  test('isEmptySession: 无用户消息=空;有用户消息/缺文件/无路径=非空(保守)', async () => {
+    const empty = path.join(TMP, 'empty.jsonl');
+    fs.writeFileSync(empty, ['{"type":"summary","summary":"x"}', '{"type":"meta"}'].join('\n'));
+    assert.equal(await m.isEmptySession(empty), true);
+    // 路径给了但文件不存在 → 保守视为非空照报
+    assert.equal(await m.isEmptySession(path.join(TMP, 'nope.jsonl')), false);
+    // 无 transcript_path(OpenClaw 场景)→ 照报
+    assert.equal(await m.isEmptySession(undefined), false);
+    const worked = path.join(TMP, 'worked.jsonl');
+    fs.writeFileSync(
+      worked,
+      [
+        '{"type":"summary","summary":"x"}',
+        '{"type":"user","message":{"role":"user","content":"hi"}}',
+        '{"type":"assistant","message":{}}',
+      ].join('\n'),
+    );
+    assert.equal(await m.isEmptySession(worked), false);
+  });
+
+  test('reportEvent: 成功打标 reported;失败静默返 false 不打标', async () => {
+    fs.rmSync(path.join(TMP, '.exomind'), { recursive: true, force: true });
+    const ev = { ts: 't', source: 'claude', session_id: 'rep-1' };
+    const ev2 = { ts: 't', source: 'claude', session_id: 'rep-2' };
+    m.appendEvent(ev);
+    m.appendEvent(ev2);
+    const okClient = { post: async () => ({}) };
+    assert.equal(await m.reportEvent(okClient, ev), true);
+    assert.equal(m.loadUnreported().length, 1, '已上报事件不进补投候选');
+    const badClient = { post: async () => { throw new Error('net'); } };
+    assert.equal(await m.reportEvent(badClient, ev2), false);
+    const pending = m.loadUnreported();
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].session_id, 'rep-2');
+  });
 });
