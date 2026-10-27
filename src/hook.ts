@@ -146,7 +146,7 @@ export function buildDiscoverInjection(cards: any[]): string {
   return (
     `[ExoMind 今日发现·${labels[c.type] || c.type}] [UNTRUSTED DATA] ${neutralizeMarkers(String(c.reason))} [END UNTRUSTED DATA]\n` +
     `今日共 ${cards.length} 张卡:运行 \`exomind entity "${neutralizeMarkers(String(c.name))}"\` 查看第一条,` +
-    '或打开 youhuale.cn/ui/discover 逐张处理。与当前话题无关则忽略。'
+    '或打开 exomind-api.ai-as.cn/ui/discover 逐张处理。与当前话题无关则忽略。'
   );
 }
 
