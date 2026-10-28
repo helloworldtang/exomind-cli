@@ -39,6 +39,15 @@ export function loadConfig(): Config {
     }
   }
   const base_url = cfg.base_url || process.env.EXOMIND_BASE_URL || DEFAULT_BASE_URL;
+  // 旧域名(youhuale.cn 及其子域)只迁文件里保存的值;env 是用户显式覆盖,不动。
+  if (cfg.base_url && cfg.base_url.includes('youhuale.cn')) {
+    try {
+      saveConfig({ base_url: DEFAULT_BASE_URL, api_key: cfg.api_key || '' });
+    } catch {
+      /* 落盘失败不影响本次用新域名,下次读取再试 */
+    }
+    return { base_url: DEFAULT_BASE_URL, api_key };
+  }
   return { base_url, api_key };
 }
 

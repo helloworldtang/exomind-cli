@@ -49,6 +49,32 @@ describe('config', () => {
     assert.equal(cfg.base_url, 'https://exomind-api.ai-as.cn');
   });
 
+  test('保存的旧域名 youhuale.cn 自动迁移到默认域名并落盘', () => {
+    fs.rmSync(mod.LEGACY_KEY_FILE, { force: true });
+    mod.saveConfig({ base_url: 'https://youhuale.cn', api_key: 'sk_old' });
+    const cfg = mod.loadConfig();
+    assert.equal(cfg.base_url, 'https://exomind-api.ai-as.cn');
+    assert.equal(cfg.api_key, 'sk_old'); // api_key 原样保留
+    const persisted = JSON.parse(fs.readFileSync(mod.CONFIG_FILE, 'utf-8'));
+    assert.equal(persisted.base_url, 'https://exomind-api.ai-as.cn'); // 已改写落盘
+  });
+
+  test('保存的旧子域 d.youhuale.cn 同样迁移', () => {
+    mod.saveConfig({ base_url: 'https://d.youhuale.cn', api_key: 'sk_old2' });
+    const cfg = mod.loadConfig();
+    assert.equal(cfg.base_url, 'https://exomind-api.ai-as.cn');
+  });
+
+  test('env 显式指定旧域名不被改写落盘', () => {
+    fs.rmSync(mod.CONFIG_FILE, { force: true });
+    delete process.env.EXOMIND_API_KEY;
+    process.env.EXOMIND_BASE_URL = 'https://youhuale.cn';
+    const cfg = mod.loadConfig();
+    assert.equal(cfg.base_url, 'https://youhuale.cn'); // 尊重用户显式覆盖
+    assert.equal(fs.existsSync(mod.CONFIG_FILE), false); // 不落盘
+    delete process.env.EXOMIND_BASE_URL;
+  });
+
   test('命令行 override 优先级最高', () => {
     process.env.EXOMIND_API_KEY = 'sk_env';
     const cfg = mod.resolveConfig({ apiKey: 'sk_flag' });
