@@ -37,12 +37,13 @@ Note: MCP `ingest` accepts plain text only (no file/dir). For files or directori
 3. Compose a descriptive title + focused tags.
 4. Call ingest ONCE per coherent item; split only for genuinely independent topics.
 5. Report the actual result — do not claim success if the tool failed or was cancelled.
+6. Read the receipt: `实体/概念` counts confirm extraction; `⚠ 降级` means raw text stored but entities pending (`exomind backfill` later); an unexpected `更新页面` target may be a dedup mis-merge — verify before moving on. Exit code 3 (`仍在后台处理`) means incomplete, NOT failed: re-run the same command to resume polling (idempotent, never double-ingests). Use `--fast` / `--no-wait` when you don't need the receipt.
 
 ## Directory ingestion
 
 - ONE `exomind ingest --dir <path>` command. Do not pre-read every file, do not concatenate, do not ingest file-by-file.
 - Incremental by default (unchanged files skipped). Use `--force` only if the user explicitly wants a full refresh.
-- Synchronous; may take minutes on weak servers. Wait and report added / updated / skipped / failed counts.
+- The command waits internally until every file finishes; report added / updated / skipped / failed counts when it exits. Do not poll or kill it.
 
 ## Auth
 

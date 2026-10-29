@@ -8,6 +8,7 @@ import { ApiClient, ApiError } from './api';
 import { resolveConfig } from './config';
 import { setJsonMode, isJsonMode, red } from './format';
 import { runHook } from './hook';
+import { IncompleteIngestError } from './ingest_async';
 import { runSessionEndHook } from './hook_session_end';
 import { runSessionStartStandalone } from './hook_session_start';
 import { runMcpServer } from './mcp';
@@ -60,6 +61,17 @@ function rootOptions(cmd: Command): AnyOpts {
 }
 
 function handleError(e: unknown): never {
+  // 「未完成」≠「失败」(2026-10-29 异步回执设计):任务已提交、后台仍在跑,
+  // 重跑同命令经幂等复用续查——独立退出码 3,让 AI/脚本区分「该重跑续查」
+  // 与「重投也没用」。
+  if (e instanceof IncompleteIngestError) {
+    if (isJsonMode()) {
+      console.log(JSON.stringify({ error: e.message, incomplete: true, job_id: e.jobId }));
+    } else {
+      console.error(red(`⚠ ${e.message}`));
+    }
+    process.exit(3);
+  }
   const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
   if (isJsonMode()) {
     console.log(JSON.stringify({ error: msg }));
@@ -129,6 +141,7 @@ program
   .option('--tag <tag>', '标签(可重复)', collect, [])
   .option('--file <path>', '从文件读取内容')
   .option('--fast', '快速模式: 原文秒存并可立即被检索,实体/关系抽取转后台(适合 Agent 自动存档)')
+  .option('--no-wait', '提交即回 job_id,不等回执(等价 --fast;需要结果时重跑同命令续查)')
   .option('--origin <tag>', '来源打标(服务端记入 ingest_log.source;hook 自动摄入传 hook-auto)')
   .option('--session <key>', '会话引用(挂到会话时间线;hook 指令自动带 claude:<会话id>)')
   .option('--dir [path]', '目录批量摄入(增量: 内容哈希跳过未变文件;目录可写在前: ingest <目录> --dir)')

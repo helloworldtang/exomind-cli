@@ -45,6 +45,9 @@ exomind ingest --file ./notes.md -t "标题"
 | `-t, --title <title>` | 标题 |
 | `--tag <tag>` | 标签(可重复) |
 | `--file <path>` | 从文件读取内容 |
+| `--fast` / `--no-wait` | 提交即回 job_id,不等回执(不需要结果时的 fire-and-forget) |
+
+单条 ingest 默认是「异步提交 + CLI 内建轮询」:命令秒级提交后自己轮询到回执(实体/概念数、新建/更新页面、降级标志)才退出——调用方/AI 无需自己轮询。退出码语义:**0=成功拿到回执,1=失败(读错误信息),3=未完成**(任务已提交、后台仍在处理;**重跑同一条命令即续查**,client_key 幂等保证绝不重复入队)。回执出现 `⚠ 降级` 表示原文已存但实体抽取走了降级路径,稍后 `exomind backfill` 补齐。
 
 #### 目录批量 + 增量(`--dir`)
 
@@ -124,7 +127,7 @@ exomind daily                        # 每日活动摘要
 
 ## 与服务器的对应关系
 
-CLI 命令与服务端 REST 端点 1:1(见 `src/exo/api/query.py`):`ingest`→`POST /ingest`、`query`→`POST /query`、`search`→`GET /search`、`entity`→`GET /entities/{name}`……认证统一走 `Authorization: Bearer <key>`,与 MCP 共用同一套 `auth_middleware`。**服务器端零改动**。
+CLI 命令与服务端 REST 端点 1:1(见 `src/exo/api/query.py`):`ingest`(默认)→`POST /ingest/async` + 轮询 `GET /ingest/status`(2026-10-29 起;`--fast`/`--no-wait` 只提交不轮询)、`query`→`POST /query`、`search`→`GET /search`、`entity`→`GET /entities/{name}`……认证统一走 `Authorization: Bearer <key>`,与 MCP 共用同一套 `auth_middleware`。**服务器端零改动**(同步端点 `POST /ingest` 保留,供 MCP/其它客户端直调)。
 
 ## 故障排查
 
