@@ -1,5 +1,6 @@
 /** exomind login — 配置 base_url + 凭证,写入 ~/.exomind/config.json (0600)。
  *
+ * 智能登录:已有凭据探活仍有效则直接返回,不弹浏览器(--force 跳过)。
  * 默认走设备码流程(免粘贴):POST /auth/device/code → 浏览器「授权登录」 → 轮询拿 key。
  * 服务端未上设备码端点(404)或 --api-key 指定时,退回手工粘贴流程。
  */
@@ -8,7 +9,7 @@ import * as os from 'node:os';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ApiClient, ApiError } from '../api';
-import { saveConfig, DEFAULT_BASE_URL } from '../config';
+import { saveConfig, loadConfig, DEFAULT_BASE_URL } from '../config';
 import { ok, dim, yellow, bold, cyan } from '../format';
 
 async function prompt(question: string): Promise<string> {
@@ -75,12 +76,35 @@ export async function deviceLogin(baseUrl: string, opts: { openBrowser?: boolean
   throw new Error(`等待授权超时(${expiresIn}s),请重新执行 emcli login`);
 }
 
+/** 智能登录探活:已有凭据打一次受保护端点,200 即仍有效。
+ * 401/403(失效)与网络错误都返回 false——交给设备流继续,它会给出更准确的错误。 */
+export async function hasFreshCredential(baseUrl: string, apiKey: string): Promise<boolean> {
+  const probe = new ApiClient({ base_url: baseUrl, api_key: apiKey });
+  try {
+    await probe.get('/keywords');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default async function login(
   _client: ApiClient,
-  opts: { baseUrl?: string; apiKey?: string },
+  opts: { baseUrl?: string; apiKey?: string; force?: boolean },
 ): Promise<void> {
   const baseUrl = opts.baseUrl || DEFAULT_BASE_URL;
   let token = opts.apiKey || '';
+
+  // 智能登录:无显式覆盖(--api-key/--base-url/--force)且已有凭据仍有效 → 直接返回,
+  // 不弹浏览器。每次 login 都重走设备流会白白打断用户(与 wxpub login 同款语义)。
+  if (!token && !opts.force && !opts.baseUrl) {
+    const existing = loadConfig();
+    const existingBase = existing.base_url || DEFAULT_BASE_URL;
+    if (existing.api_key && (await hasFreshCredential(existingBase, existing.api_key))) {
+      console.log(ok(`凭证仍有效(${existingBase}),未重新登录。强制重登用: emcli login --force`));
+      return;
+    }
+  }
 
   if (!token) {
     // 默认设备码(浏览器「授权登录」,免粘贴);服务端未升级(404/405)退回手工粘贴

@@ -117,6 +117,7 @@ program
   .description('配置服务器地址与凭证,写入 ~/.exomind/config.json')
   .option('--base-url <url>', '服务器地址')
   .option('--api-key <key>', 'API Key 或登录 token(不填则交互输入)')
+  .option('--force', '跳过「凭证仍有效」检查,无条件重新登录(换账号用)')
   .action(run(login));
 
 program
