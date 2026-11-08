@@ -266,9 +266,17 @@ interface PendingJob {
 export interface TrackOpts {
   tag?: string[];
   concurrency?: number;
-  /** 轮询间隔(ms)与连续失败轮上限——测试注入用,生产走默认。 */
+  /** 首轮轮询间隔(ms)与连续失败轮上限——测试注入用,生产走默认(5s,后续轮次按 nextRoundDelay 退避)。 */
   pollIntervalMs?: number;
   maxFailedRounds?: number;
+}
+
+/** 下一轮询轮间隔:prev × 2,封顶 30s(与单条轮询同一条曲线)。
+ *  --dir 曾固定 2s 一轮:并发 3 × LLM 1-3min,一次目录跑轻松打上百次
+ *  /ingest/status(2026-11-08 线上实测轮询放大 9.6×/任务)。退避后 2min
+ *  目录跑约 7 轮 × N 任务,调用次数降一个数量级。 */
+export function nextRoundDelay(prevMs: number): number {
+  return Math.min(Math.round(prevMs * 2), 30000);
 }
 
 export interface TrackResult {
@@ -292,7 +300,7 @@ export async function submitAndTrack(
   manifest: Manifest,
 ): Promise<TrackResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 3);
-  const pollInterval = opts.pollIntervalMs ?? 2000;
+  let pollDelay = opts.pollIntervalMs ?? 5000; // 首轮即查(快任务/续查秒回),后续按 nextRoundDelay 退避
   const maxFailedRounds = opts.maxFailedRounds ?? 5;
   let added = 0;
   let updated = 0;
@@ -396,7 +404,8 @@ export async function submitAndTrack(
     }
     if (inFlight.size > 0) {
       process.stderr.write(`${dim('⏳')} [完成 ${done}/${totalJobs}] 轮询中…\n`);
-      await sleep(pollInterval);
+      await sleep(pollDelay);
+      pollDelay = nextRoundDelay(pollDelay);
     }
   }
   return { added, updated, degraded, failed, spooled };

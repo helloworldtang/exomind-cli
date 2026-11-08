@@ -28,6 +28,16 @@ function item(file: string, content: string) {
   return { path: file, content, title: id.deriveTitle(file, content), hash: man.sha256(content) };
 }
 
+describe('nextRoundDelay', () => {
+  test('×2 增长,30s 封顶(--dir 轮次退避,替代固定 2s 轮询)', () => {
+    assert.equal(id.nextRoundDelay(5000), 10000);
+    assert.equal(id.nextRoundDelay(10000), 20000);
+    assert.equal(id.nextRoundDelay(20000), 30000); // 40000 → 封顶
+    assert.equal(id.nextRoundDelay(30000), 30000);
+    assert.equal(id.nextRoundDelay(1), 2); // 无下限,测试注入 1ms 不被抬到秒级
+  });
+});
+
 describe('submitAndTrack', () => {
   test('成功路径: 记账 added + manifest 记录 status=ok', async () => {
     const f = path.join(TMP, 'ok.md');

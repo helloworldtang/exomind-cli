@@ -8,8 +8,11 @@
  *  (退避/429/总预算/退出码)散落在每个调用方必然长出不一致实现(--dir 429 风暴
  *  自锁教训);AI 侧永远只面对「命令退出码 + 回执文本」这个简单接口。
  *
- *  轮询纪律(继承 429 风暴根治结论):
- *  - 间隔 2s 起、×1.5 增长、30s 封顶(单条 5min 预算内 ≈20 次查询,不刷屏);
+ *  轮询纪律(继承 429 风暴根治结论;间隔曲线 2026-11-08 按线上实测校准:
+ *  服务端 LLM 抽取 1-3min,旧曲线 2s 起意味着前 15s 内 4 次轮询注定扑空,
+ *  实测 182 次 status / 19 任务 = 9.6 次每任务):
+ *  - 间隔 10s 起、×2 增长、30s 封顶(120s 典型任务 ≈5 次查询,较旧曲线省一半);
+ *    封顶 30s 即回执最坏附加时延,与旧曲线一致,不额外牺牲体验;
  *  - 单次轮询撞 429 走 retryWith429(Retry-After 秒级退避,上限 60s,最多 3 次);
  *  - 总预算默认 5min(EXOMIND_TIMEOUT_MS 可覆盖);耗尽 = 「未完成」而非「失败」:
  *    抛 IncompleteIngestError → exit code 3。重跑同命令经 client_key 幂等复用
@@ -18,7 +21,8 @@ import type { ApiClient } from './api';
 import { opTimeout } from './api';
 import { ingestWithRetry, retryWith429 } from './ingest_dir';
 
-const POLL_MIN_MS = 2000;
+/** 首轮轮询间隔(生产默认):LLM 抽取 1-3min,10s 内几乎不可能 done,首轮即扑空。 */
+const POLL_FIRST_MS = 10000;
 const POLL_MAX_MS = 30000;
 
 /** 「未完成」≠「失败」:任务已提交、仍在后台处理,重跑同命令可续查。 */
@@ -31,9 +35,9 @@ export class IncompleteIngestError extends Error {
   }
 }
 
-/** 下一轮轮询间隔:prev × 1.5,夹在 [2s, 30s]。独立导出供单测。 */
+/** 下一轮轮询间隔:prev × 2,封顶 30s(无下限——从注入的初始间隔起算,测试注入 1ms 不会变慢)。独立导出供单测。 */
 export function nextPollDelay(prevMs: number): number {
-  return Math.min(Math.max(Math.round(prevMs * 1.5), POLL_MIN_MS), POLL_MAX_MS);
+  return Math.min(Math.round(prevMs * 2), POLL_MAX_MS);
 }
 
 export interface PollOpts {
@@ -65,7 +69,7 @@ export async function submitAndWaitReceipt(
   const budget = opts.pollBudgetMs ?? opTimeout(300000);
   const maxFailedRounds = opts.maxFailedRounds ?? 5;
   const deadline = Date.now() + budget;
-  let delay = opts.pollIntervalMs ?? POLL_MIN_MS;
+  let delay = opts.pollIntervalMs ?? POLL_FIRST_MS;
   let failedRounds = 0;
   while (true) {
     let s: any;

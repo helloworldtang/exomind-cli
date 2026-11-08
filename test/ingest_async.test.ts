@@ -1,7 +1,7 @@
 /** submitAndWaitReceipt:单条 ingest 异步提交+内建轮询的行为边界。
  *  护栏对象(2026-10-29 设计):done 回执字段透传、failed 报错、预算耗尽转
  *  「未完成」(IncompleteIngestError,exit 3 语义)、轮询 429 退避不吞、
- *  服务器不可达连续失败上限、退避曲线 2s→30s 封顶。 */
+ *  服务器不可达连续失败上限、退避曲线 ×2→30s 封顶(2026-11-08 校准:10s 起)。 */
 import './_setup_cache';
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,12 +38,12 @@ function fakeClient(gets: any[] | ((n: number) => any), posts: any[] = [{ job_id
 }
 
 describe('nextPollDelay', () => {
-  test('×1.5 增长,30s 封顶,下限 2s', () => {
-    assert.equal(m.nextPollDelay(2000), 3000);
-    assert.equal(m.nextPollDelay(3000), 4500);
-    assert.equal(m.nextPollDelay(20000), 30000);
+  test('×2 增长,30s 封顶,无下限(从注入初始间隔起算)', () => {
+    assert.equal(m.nextPollDelay(2000), 4000);
+    assert.equal(m.nextPollDelay(10000), 20000);
+    assert.equal(m.nextPollDelay(20000), 30000); // 40000 → 封顶
     assert.equal(m.nextPollDelay(30000), 30000);
-    assert.equal(m.nextPollDelay(1), 2000); // 下限兜底
+    assert.equal(m.nextPollDelay(1), 2); // 无下限兜底,测试注入 1ms 不被抬到秒级
   });
 });
 
