@@ -2,6 +2,7 @@
 import type { ApiClient } from '../api';
 import { retryWith429 } from '../ingest_dir';
 import { output, cyan, dim, yellow, truncate } from '../format';
+import { formatTrace } from './trace';
 
 export default async function search(
   client: ApiClient,
@@ -34,6 +35,9 @@ export default async function search(
       const snip = r.snippet ?? r.content;
       if (snip) console.log(dim(`     ${truncate(String(snip), 100)}`));
       if (r.score != null) console.log(dim(`     score: ${r.score}`));
+      // 结果级归因:这条被哪几路召回(服务端 2026-11-08 起;旧服务端无此字段不显示)
+      if (Array.isArray(r.legs) && r.legs.length) console.log(dim(`     召回路: ${r.legs.join('+')}`));
     });
+    formatTrace(result.trace);
   });
 }

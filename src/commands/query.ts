@@ -2,6 +2,7 @@
 import { opTimeout, type ApiClient } from '../api';
 import { retryWith429 } from '../ingest_dir';
 import { output, dim, cyan, truncate, hint } from '../format';
+import { formatTrace } from './trace';
 
 export default async function query(
   client: ApiClient,
@@ -24,5 +25,7 @@ export default async function query(
       console.log(dim(`\n引用 ${result.pages_used ?? result.pages.length} 页 (${result.model || 'llm'}):`));
       for (const p of result.pages) console.log(cyan(`  • ${truncate(p, 80)}`));
     }
+    // 检索链路 trace(服务端 2026-11-08 起):召回路 + 静默降级——agent 据此判断证据强度。
+    formatTrace(result.trace);
   });
 }
