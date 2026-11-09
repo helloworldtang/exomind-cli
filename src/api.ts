@@ -1,4 +1,5 @@
 /** HTTP 客户端: 基于 Node 18+ 全局 fetch,统一 Bearer 认证 + 错误归一。 */
+import pkg from '../package.json' assert { type: 'json' };
 import type { Config } from './config';
 
 /** 长操作超时(ingest/query/synthesize): 优先 EXOMIND_TIMEOUT_MS 环境变量,否则用默认值。 */
@@ -109,6 +110,9 @@ export class ApiClient {
         method,
         headers: {
           Authorization: `Bearer ${this.cfg.api_key}`,
+          // 显式 UA 替代 undici 默认的 "node"(2026-11-09):服务端日志按此分桶
+          // CLI 流量,版本随发版自动携带——老版本机器继续发 "node",天然分桶过渡。
+          'User-Agent': `exomind-cli/${pkg.version}`,
           ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,

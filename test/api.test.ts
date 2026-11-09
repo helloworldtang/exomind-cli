@@ -157,3 +157,17 @@ describe('ApiClient', () => {
     assert.ok(!isTransientError(new Error('普通错')));
   });
 });
+
+describe('ApiClient UA', () => {
+  test('每个请求带 exomind-cli/<version> UA(服务端日志分桶依据,替代默认 node)', async () => {
+    let seen: Record<string, string> | undefined;
+    global.fetch = (async (_u: string, init?: RequestInit) => {
+      seen = init?.headers as Record<string, string>;
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    const pkg = (await import('../package.json', { with: { type: 'json' } })).default;
+    const c = new ApiClient({ base_url: 'https://x', api_key: 'k' });
+    await c.get('/ping');
+    assert.equal(seen?.['User-Agent'], `exomind-cli/${pkg.version}`);
+  });
+});
