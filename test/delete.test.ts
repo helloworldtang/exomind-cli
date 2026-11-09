@@ -66,16 +66,15 @@ describe('delete', () => {
     assert.ok(!calls.some((c) => c.method === 'DELETE'), '回答 n 不得发 DELETE');
   });
 
-  test('裸实体名自动解析:先探测各目录的 /pages/{path}', async () => {
+  test('裸实体名自动解析:/pages/resolve 单点解析后再删', async () => {
     const urls: string[] = [];
     global.fetch = (async (url: string, init?: RequestInit) => {
       urls.push(url);
       if (init?.method === 'DELETE') {
         return new Response(JSON.stringify({ deleted: true, path: 'concepts/缓存.md', trash_path: '.trash/202609/concepts/缓存.md' }), { status: 200 });
       }
-      // entities/缓存.md 404,concepts/缓存.md 200(分段编码:斜杠保留,中文转义)
-      if (url.includes('/pages/entities/')) {
-        return new Response(JSON.stringify({ detail: '页面不存在' }), { status: 404 });
+      if (url.includes('/pages/resolve')) {
+        return new Response(JSON.stringify({ path: 'concepts/缓存.md', title: '缓存' }), { status: 200 });
       }
       return new Response(JSON.stringify({ title: '缓存' }), { status: 200 });
     }) as typeof fetch;
