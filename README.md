@@ -54,7 +54,7 @@ emcli feedback "entities/Redis.md" positive
 - **读取优先级**:`config.json` 的 `api_key` → 环境变量 `EXOMIND_API_KEY` → 旧版遗留文件 `~/.claude/scripts/.exomind-api-key`(向后兼容老安装)。三者任一存在即免登录。
 - **CI / 免登录**:只设环境变量 `EXOMIND_API_KEY`(可选 `EXOMIND_BASE_URL`)即可,完全不写本地文件。`config.json` 优先级高于环境变量,故已 `login` 的机器需 `--api-key` 才能临时覆盖。
 - **校验行为**:`login` 先探活 `/keywords` **通过后再落盘**——401/403 时**不写文件**,避免无效凭证覆盖已有有效配置;网络错误无法判定时仍保存并提示"登录成功(未校验)",稍后用 `emcli me` 复核。
-- **换号 / 登出**:重新 `emcli login` 覆盖旧凭证;彻底登出删 `~/.exomind/config.json`。
+- **换号 / 登出**:`emcli update [--api-key <key>]` 替换 API Key(校验通过才落盘;缺省交互粘贴);`emcli logout` 清除本地凭据、保留服务器地址。注意 `~/.exomind/config.json` 由 exomind-cli/earshot/fireCut 共享,logout 后三者的调用一并失效;服务端吊销 key 需到管理端 account 页操作。
 - **安全提醒**:文件是**明文**,任何能读你 home 目录的进程都能拿到 key。共享机器 / 不信任环境请用环境变量,不要用 `login`。
 
 > 把 API Key 当密码对待:不提交进仓库、不贴进聊天。脚本化登录用 `emcli login --api-key ...`(注意别让 key 进 shell 历史或进程列表);交互式 `emcli login` 的 prompt 读取不走 shell 历史。
@@ -101,7 +101,7 @@ emcli install          # 装 skill + hook + MCP(各宿主),全部自动(幂等+�
 
 | 命令 | 说明 |
 |------|------|
-| `login` / `me` | 配置与查看登录态 |
+| `login` / `update` / `logout` / `me` | 登录(设备流)、替换 API Key、清除本地凭据、查看登录态——凭据生命周期闭环 |
 | `ingest` / `archive` | 导入/存档知识(文本 / stdin / `--file`;`--origin <tag>` 来源打标——hook 自动摄入服务端记 `hook-auto`,与用户显式存档区分,R24 候选区判据) |
 | `backfill` / `drain` | 补跑降级摄入(原文已入库、实体抽取待补)/ 补投本地队列(断网时未提交的摄入) |
 | `query` | LLM 问答 |

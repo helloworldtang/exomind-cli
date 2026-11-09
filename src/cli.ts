@@ -28,6 +28,8 @@ import gaps from './commands/gaps';
 import feedback from './commands/feedback';
 import daily from './commands/daily';
 import login from './commands/login';
+import update from './commands/update';
+import logout from './commands/logout';
 import whoami from './commands/whoami';
 import deletePage from './commands/delete';
 import getPage from './commands/get';
@@ -119,6 +121,17 @@ program
   .option('--api-key <key>', 'API Key 或登录 token(不填则交互输入)')
   .option('--force', '跳过「凭证仍有效」检查,无条件重新登录(换账号用)')
   .action(run(login));
+
+program
+  .command('update')
+  .description('替换 API Key(新 key 从管理端复制;获取凭据用 login)')
+  .option('--api-key <key>', '新 API Key 或登录 token(不填则交互粘贴)')
+  .action(run(update));
+
+program
+  .command('logout')
+  .description('清除本地凭据(保留服务器地址;earshot/fireCut 共用该配置,会一并失效)')
+  .action(run(logout));
 
 program
   .command('me')
