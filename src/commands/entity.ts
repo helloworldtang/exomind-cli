@@ -22,5 +22,13 @@ export default async function entity(
         console.log(`  ${cyan(r.type)} → ${r.entity} ${dim(`(${r.confidence ?? ''})`)}`);
       }
     }
+    // 描述版本链(服务端 2026-11-09 起,新→旧):纠错排查用——「原来是什么/哪条路径改的」。
+    // cause 词表:ingest_longer=摄入更长替换 / merge_absorbed=合并被吸收 / merge_replaced_own=合并让位 / human_edit=人工修正
+    if (result.desc_history?.length) {
+      console.log(dim(`\n描述历史 (${result.desc_history.length},新→旧):`));
+      for (const h of result.desc_history) {
+        console.log(dim(`  [${h.ts ?? ''}] ${h.cause ?? ''}${h.by ? ` · ${h.by}` : ''}: ${truncate(String(h.desc ?? ''), 80)}`));
+      }
+    }
   });
 }
