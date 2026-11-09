@@ -91,8 +91,12 @@ function run<T = AnyOpts>(fn: (client: ApiClient, opts: T, args: string[]) => Pr
     setJsonMode(!!root.json);
     const cfg = resolveConfig({ baseUrl: root.baseUrl as string | undefined, apiKey: root.apiKey as string | undefined });
     const client = new ApiClient(cfg);
+    // commander 12: root 与子命令同名旗标(--api-key/--base-url)时,子命令位置上的值会被 root 截走、
+    // command.opts() 拿不到——合并 root 选项进子命令 opts(login --api-key 脚本化登录曾因此被吞)。
+    // 子命令已定义的同名项优先。
+    const merged = { ...root, ...(command.opts() as AnyOpts) };
     try {
-      await fn(client, command.opts() as T, command.args);
+      await fn(client, merged as T, command.args);
       if (!root.json) await maybeNotifyUpdate(VERSION); // json 模式不打扰机器输出
     } catch (e) {
       handleError(e);
