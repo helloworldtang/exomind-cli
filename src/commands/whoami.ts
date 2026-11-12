@@ -37,6 +37,12 @@ export default async function whoami(client: ApiClient): Promise<void> {
         } else {
           console.log(dim(`  用户ID: ${userId}`));
         }
+        // 凭据有效期:manager /auth/me 透传(auth 北京时间串);null=长期有效,
+        // undefined(JWT/旧服务端)=不显示——有则显示、无则静默,不欠表现。
+        if (me.method === 'api_key' && 'expires_at' in me) {
+          const exp = me.expires_at;
+          console.log(dim(`  凭证有效期: ${typeof exp === 'string' && exp ? exp : '长期有效'}`));
+        }
       }
     },
   );
