@@ -345,7 +345,10 @@ program
       // 钩子失败绝不阻塞用户的 prompt
       process.stderr.write(`[exomind hook] ${e instanceof Error ? e.message : String(e)}\n`);
     }
-    process.exit(0);
+    // 不 process.exit(0) 硬退:Windows 上退出瞬间若有 libuv async 句柄(stdio 管道等)
+    // 尚在关闭流程,强退命中 src\win\async.c:94 断言崩溃(0.38.1 Windows 实报)。
+    // 异步收尾后句柄均已清理(api.ts 定时器 finally 清、detached child unref),
+    // 事件循环自然排空退出,退出码默认 0。
   });
 
 // ── SessionStart 接力注入(R32-1,P3 handoff 读出侧;服务端未上线时静默)──
@@ -354,7 +357,7 @@ program
   .description('会话首帧接力注入(由 install 配置的 hook 调用,非手动):拉 handoff 包进上下文')
   .action(async () => {
     await runSessionStartStandalone(); // 内部全程静默,绝不阻塞会话启动
-    process.exit(0);
+    // 同 hook:不 process.exit(0),自然退出(Windows libuv async.c:94 断言)
   });
 
 // ── SessionEnd 采集探针(P3 会话编译前置,纯本地零 token)──
@@ -368,7 +371,7 @@ program
     } catch {
       /* ignore */
     }
-    process.exit(0);
+    // 同 hook:不 process.exit(0),自然退出(Windows libuv async.c:94 断言)
   });
 
 // ── MCP server(把核心命令暴露为 typed tool,补"能力层")──
