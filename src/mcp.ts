@@ -9,6 +9,7 @@ import * as readline from 'node:readline';
 import pkg from '../package.json' assert { type: 'json' };
 import { ApiClient, opTimeout } from './api';
 import { ingestWithRetry, retryWith429 } from './ingest_dir';
+import { POLL_FIRST_MS, nextPollDelay } from './ingest_async';
 import { sha256, deriveClientKey } from './manifest';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -173,6 +174,10 @@ async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Prom
   const jobId = submit.job_id;
 
   const deadline = Date.now() + opTimeout(600000); // 轮询总预算 10min(EXOMIND_TIMEOUT_MS 可覆盖)
+  // 轮询退避与 CLI 单条摄入同源(10s 起 ×2 封顶 30s,2026-11-12 复测发现 MCP 路径
+  // 漏改仍固定 2s:慢任务被打 297 次/9.5min,占当日 GET /ingest/status 的 70%)。
+  // EXOMIND_MCP_POLL_FIRST_MS 供测试注入(1ms)与线上应急调参。
+  let pollMs = Number(process.env.EXOMIND_MCP_POLL_FIRST_MS) || POLL_FIRST_MS;
   while (true) {
     let s: any;
     try {
@@ -185,7 +190,8 @@ async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Prom
             '任务已提交,可能仍在后台处理——稍后重查,勿盲目重投',
         );
       }
-      await sleep(2000);
+      await sleep(pollMs);
+      pollMs = nextPollDelay(pollMs);
       continue;
     }
     if (s.status === 'done') {
@@ -209,7 +215,8 @@ async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Prom
           '稍后可重查 /ingest/status,勿盲目重投',
       );
     }
-    await sleep(2000);
+    await sleep(pollMs);
+    pollMs = nextPollDelay(pollMs);
   }
 }
 

@@ -1,4 +1,4 @@
-import { describe, test, afterEach } from 'node:test';
+import { describe, test, afterEach, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient } from '../src/api';
 import { handleMessage, TOOLS } from '../src/mcp';
@@ -194,6 +194,13 @@ describe('mcp: tools/call', () => {
 });
 
 describe('mcp: ingest 异步化(2026-10-16 响应丢失事故修复)', () => {
+  before(() => {
+    // 轮询退避(10s 起)注入 1ms,本组测试不再吃真实 sleep
+    process.env.EXOMIND_MCP_POLL_FIRST_MS = '1';
+  });
+  after(() => {
+    delete process.env.EXOMIND_MCP_POLL_FIRST_MS;
+  });
   afterEach(() => {
     global.fetch = origFetch;
   });
@@ -276,5 +283,24 @@ describe('mcp: ingest 异步化(2026-10-16 响应丢失事故修复)', () => {
     assert.equal(data.entities, 1);
     assert.equal(data.dedup, 'recent');
     assert.ok(seen.urls.some((u) => u.includes('job_id=9')));
+  });
+
+  test('轮询间隔走退避注入(EXOMIND_MCP_POLL_FIRST_MS),慢任务链路不再固定 2s', async () => {
+    // 质量点:2026-11-12 复测发现 MCP 路径漏改退避(固定 2s,慢任务被打 297 次/9.5min)。
+    // 注入 1ms 后 running→running→done 三轮轮询应在 1s 内完成——退避读的是注入值而非固定 2s。
+    mockFetchSeq([
+      { match: /\/ingest\/async$/, body: { job_id: 55, status: 'pending' } },
+      { match: /\/ingest\/status/, body: { job_id: 55, status: 'running' } },
+      { match: /\/ingest\/status/, body: { job_id: 55, status: 'running' } },
+      { match: /\/ingest\/status/, body: { job_id: 55, status: 'done', entities: 0, concepts: 0 } },
+    ]);
+    const t0 = Date.now();
+    await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 23,
+      method: 'tools/call',
+      params: { name: 'ingest', arguments: { content: 'backoff' } },
+    });
+    assert.ok(Date.now() - t0 < 1000, '三轮轮询应走注入的 1ms 间隔,而非固定 2s×3');
   });
 });

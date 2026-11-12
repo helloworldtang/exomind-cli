@@ -21,8 +21,9 @@ import type { ApiClient } from './api';
 import { opTimeout } from './api';
 import { ingestWithRetry, retryWith429 } from './ingest_dir';
 
-/** 首轮轮询间隔(生产默认):LLM 抽取 1-3min,10s 内几乎不可能 done,首轮即扑空。 */
-const POLL_FIRST_MS = 10000;
+/** 首轮轮询间隔(生产默认):LLM 抽取 1-3min,10s 内几乎不可能 done,首轮即扑空。
+ *  导出供 mcp.ts 复用(MCP ingest 轮询退避与 CLI 单条同源)。 */
+export const POLL_FIRST_MS = 10000;
 const POLL_MAX_MS = 30000;
 
 /** 「未完成」≠「失败」:任务已提交、仍在后台处理,重跑同命令可续查。 */
