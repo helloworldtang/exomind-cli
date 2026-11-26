@@ -162,6 +162,11 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  *  客户端干等满超时报 failed,Agent 误判"摄入失败"可能重摄造成重复页)。
  *  异步轮询天然免疫单向丢包:提交响应丢了 → 同 client_key 重发复用 job;
  *  状态响应丢了 → 下一轮重查。client_key 同步路径也带(与 CLI 单条摄入一致)。 */
+/** MCP 的请求来源身份：ApiClient 以此发 `X-Exo-Origin`，摄入载荷也带同一个词（/ingest 的 origin）。
+ *  服务端据此把 MCP 的查询/摄入与用户本人的分开记——「你今天问过」只认本人，MCP 会话笔记不进简报
+ *  （2026-11-27 用户实拍：简报推回「找回 · 一周七株 — 你今天问过…」，问的人其实是 Agent）。 */
+export const MCP_ORIGIN = 'mcp';
+
 async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Promise<unknown> {
   const content = str(args.content) ?? '';
   if (!content.trim()) throw new Error('content 不能为空');
@@ -169,6 +174,7 @@ async function mcpIngest(client: ApiClient, args: Record<string, unknown>): Prom
   if (args.title) payload.title = str(args.title);
   if (Array.isArray(args.tags) && args.tags.length) payload.tags = args.tags;
   payload.client_key = deriveClientKey(sha256(content)); // 提交幂等:超时重发不二次入队
+  payload.origin = MCP_ORIGIN; // 摄入来源打标:落 ingest_log.source（此前缺省与用户手存的同为 async，服务端无从区分）
 
   const submit = await ingestWithRetry(client, payload, opTimeout(30000), '/ingest/async');
   const jobId = submit.job_id;

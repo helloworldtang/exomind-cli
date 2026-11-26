@@ -1,7 +1,7 @@
 import { describe, test, afterEach, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient } from '../src/api';
-import { handleMessage, TOOLS } from '../src/mcp';
+import { MCP_ORIGIN, handleMessage, TOOLS } from '../src/mcp';
 
 const origFetch = global.fetch;
 function mockFetch(
@@ -13,7 +13,27 @@ afterEach(() => {
   global.fetch = origFetch;
 });
 
-const client = () => new ApiClient({ base_url: 'https://x.test', api_key: 'k' });
+// 与 `exomind mcp` 命令的接线一致：MCP = Agent 替用户干活，请求自报身份
+const client = () => new ApiClient({ base_url: 'https://x.test', api_key: 'k' }, MCP_ORIGIN);
+
+describe('mcp: 请求来源身份（2026-11-27）', () => {
+  test('MCP 发出的每个请求都带 X-Exo-Origin: mcp', async () => {
+    const origins: Array<string | undefined> = [];
+    mockFetch((_url, init) => {
+      origins.push((init?.headers as Record<string, string>)?.['X-Exo-Origin']);
+      return { ok: true, status: 200, statusText: '', text: async () => JSON.stringify({ answer: 'a', sources: [] }) };
+    });
+    await handleMessage(client(), {
+      jsonrpc: '2.0',
+      id: 90,
+      method: 'tools/call',
+      params: { name: 'query', arguments: { question: '认知周报' } },
+    });
+    assert.equal(MCP_ORIGIN, 'mcp');
+    assert.ok(origins.length >= 1, '应至少发出一次请求');
+    assert.deepEqual([...new Set(origins)], ['mcp'], `每个请求都要自报：${JSON.stringify(origins)}`);
+  });
+});
 
 describe('mcp: 协议握手', () => {
   test('initialize 返回协议版本与 serverInfo', async () => {
@@ -248,6 +268,8 @@ describe('mcp: ingest 异步化(2026-10-16 响应丢失事故修复)', () => {
     assert.equal(submitted.content, 'hello 世界');
     assert.equal(submitted.title, 'T');
     assert.match(submitted.client_key, /^cli-[A-Za-z0-9_-]{44}$/);
+    // 摄入来源打标：落服务端 ingest_log.source=mcp（MCP 会话笔记不进简报候选池，2026-11-27）
+    assert.equal(submitted.origin, 'mcp');
     // 轮询到终态
     assert.ok(seen.urls.some((u) => u.includes('/ingest/status') && u.includes('job_id=42')));
   });

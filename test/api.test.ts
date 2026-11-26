@@ -69,6 +69,19 @@ describe('ApiClient', () => {
     assert.equal(JSON.parse(body as string).content, 'hello');
   });
 
+  test('origin 自报身份：传了才发 X-Exo-Origin，省略不发（本人用 CLI 不自报）', async () => {
+    let seen: Record<string, string> | undefined;
+    mockFetch((_url, init) => {
+      seen = init?.headers as Record<string, string>;
+      return { ok: true, status: 200, text: async () => '{}' };
+    });
+    await new ApiClient({ base_url: 'https://x', api_key: 'k' }).get('/stats');
+    assert.equal(seen!['X-Exo-Origin'], undefined);
+    assert.equal(seen!['User-Agent'].startsWith('exomind-cli/'), true, 'UA 家族不变（服务端按它分桶）');
+    await new ApiClient({ base_url: 'https://x', api_key: 'k' }, 'mcp').get('/stats');
+    assert.equal(seen!['X-Exo-Origin'], 'mcp');
+  });
+
   test('非 2xx 收集响应头(小写)+ 解析 body', async () => {
     mockFetch(() => ({
       ok: false, status: 429, statusText: 'Too Many Requests',

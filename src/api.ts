@@ -77,7 +77,16 @@ export interface RequestOptions {
 type QueryValue = string | number | boolean | undefined | null;
 
 export class ApiClient {
-  constructor(private cfg: Config) {}
+  /**
+   * @param origin 请求来源身份（`X-Exo-Origin`，2026-11-27）。省略 = 用户本人在用 CLI；
+   *   MCP 服务传 `mcp`——它是 Agent 替用户干活，服务端据此把「Agent 替他问了/存了什么」
+   *   与「用户本人问了/存了什么」分开记（简报找回卡只认本人查询，MCP 会话笔记不进简报）。
+   *   UA 说「哪个程序」（MCP 与 CLI 同为 exomind-cli/<版本>），origin 说「替谁干活」。
+   */
+  constructor(
+    private cfg: Config,
+    private origin = '',
+  ) {}
 
   private ensureKey(): void {
     if (!this.cfg.api_key) {
@@ -113,6 +122,7 @@ export class ApiClient {
           // 显式 UA 替代 undici 默认的 "node"(2026-11-09):服务端日志按此分桶
           // CLI 流量,版本随发版自动携带——老版本机器继续发 "node",天然分桶过渡。
           'User-Agent': `exomind-cli/${pkg.version}`,
+          ...(this.origin ? { 'X-Exo-Origin': this.origin } : {}),
           ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,

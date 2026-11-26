@@ -11,7 +11,7 @@ import { runHook } from './hook';
 import { IncompleteIngestError } from './ingest_async';
 import { runSessionEndHook } from './hook_session_end';
 import { runSessionStartStandalone } from './hook_session_start';
-import { runMcpServer } from './mcp';
+import { MCP_ORIGIN, runMcpServer } from './mcp';
 import { maybeNotifyUpdate } from './update-check';
 
 import ingest from './commands/ingest';
@@ -386,7 +386,7 @@ program
       baseUrl: root.baseUrl as string | undefined,
       apiKey: root.apiKey as string | undefined,
     });
-    const client = new ApiClient(cfg);
+    const client = new ApiClient(cfg, MCP_ORIGIN); // MCP = Agent 替用户干活，请求自报身份（X-Exo-Origin）
     await runMcpServer(client);
   });
 
