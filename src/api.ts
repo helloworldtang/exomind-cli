@@ -88,6 +88,14 @@ export class ApiClient {
     private origin = '',
   ) {}
 
+  /** 请求头里的客户端名：UA 说「哪个客户端」，origin 说「替谁干活」（UA 标准：线上日志按 ua= 分清
+   *  每条流量来自哪个客户端/版本）。MCP 是与命令行不同的客户端——Agent 的工具调用，不是人/脚本
+   *  敲的命令——即便同在一个包里也发自己的 UA：exomind-mcp/<版本>；命令行与 hook 仍是
+   *  exomind-cli/<版本>。服务端访问日志只记 ua=，共用 UA 就分不开这两路流量。 */
+  private uaName(): string {
+    return `exomind-${this.origin || 'cli'}`;
+  }
+
   private ensureKey(): void {
     if (!this.cfg.api_key) {
       throw new ApiError(401, '未登录。请先运行 `exomind login`,或设置环境变量 EXOMIND_API_KEY。');
@@ -121,7 +129,7 @@ export class ApiClient {
           Authorization: `Bearer ${this.cfg.api_key}`,
           // 显式 UA 替代 undici 默认的 "node"(2026-11-09):服务端日志按此分桶
           // CLI 流量,版本随发版自动携带——老版本机器继续发 "node",天然分桶过渡。
-          'User-Agent': `exomind-cli/${pkg.version}`,
+          'User-Agent': `${this.uaName()}/${pkg.version}`,
           ...(this.origin ? { 'X-Exo-Origin': this.origin } : {}),
           ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },

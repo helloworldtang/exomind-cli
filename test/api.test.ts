@@ -80,6 +80,8 @@ describe('ApiClient', () => {
     assert.equal(seen!['User-Agent'].startsWith('exomind-cli/'), true, 'UA 家族不变（服务端按它分桶）');
     await new ApiClient({ base_url: 'https://x', api_key: 'k' }, 'mcp').get('/stats');
     assert.equal(seen!['X-Exo-Origin'], 'mcp');
+    // MCP 是另一个客户端：UA 也自成一家（访问日志只记 ua=，共用 UA 分不开这两路流量）
+    assert.match(seen!['User-Agent'], /^exomind-mcp\/\d+\.\d+\.\d+/);
   });
 
   test('非 2xx 收集响应头(小写)+ 解析 body', async () => {

@@ -17,10 +17,13 @@ afterEach(() => {
 const client = () => new ApiClient({ base_url: 'https://x.test', api_key: 'k' }, MCP_ORIGIN);
 
 describe('mcp: 请求来源身份（2026-11-27）', () => {
-  test('MCP 发出的每个请求都带 X-Exo-Origin: mcp', async () => {
+  test('MCP 发出的每个请求都带 X-Exo-Origin: mcp，UA 自成一家 exomind-mcp/<版本>', async () => {
     const origins: Array<string | undefined> = [];
+    const uas: Array<string | undefined> = [];
     mockFetch((_url, init) => {
-      origins.push((init?.headers as Record<string, string>)?.['X-Exo-Origin']);
+      const h = init?.headers as Record<string, string>;
+      origins.push(h?.['X-Exo-Origin']);
+      uas.push(h?.['User-Agent']);
       return { ok: true, status: 200, statusText: '', text: async () => JSON.stringify({ answer: 'a', sources: [] }) };
     });
     await handleMessage(client(), {
@@ -32,6 +35,11 @@ describe('mcp: 请求来源身份（2026-11-27）', () => {
     assert.equal(MCP_ORIGIN, 'mcp');
     assert.ok(origins.length >= 1, '应至少发出一次请求');
     assert.deepEqual([...new Set(origins)], ['mcp'], `每个请求都要自报：${JSON.stringify(origins)}`);
+    assert.deepEqual(
+      [...new Set(uas.map((u) => (u || '').split('/')[0]))],
+      ['exomind-mcp'],
+      `UA 客户端名应为 exomind-mcp（访问日志按 ua= 分清 MCP 与命令行）：${JSON.stringify(uas)}`,
+    );
   });
 });
 
